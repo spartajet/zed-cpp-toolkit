@@ -1,14 +1,15 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+use zed_extension_api as zed;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod cmake;
+mod debug;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+#[derive(Default)]
+struct MsvcToolkitExtension;
+
+impl zed::Extension for MsvcToolkitExtension {
+    fn new() -> Self {
+        Self
     }
 }
+
+zed::register_extension!(MsvcToolkitExtension);
