@@ -1,0 +1,48 @@
+[
+  {
+    "label": "CMake: Configure (Debug)",
+    "command": "cmake",
+    "args": [
+      "-S",
+      "$ZED_WORKTREE_ROOT",
+      "-B",
+      "$ZED_WORKTREE_ROOT/build",
+      "-DCMAKE_BUILD_TYPE=Debug"
+    ],
+    "env": {}
+  },
+  {
+    "label": "CMake: Build (Debug)",
+    "command": "cmake",
+    "args": [
+      "--build",
+      "$ZED_WORKTREE_ROOT/build",
+      "--config",
+      "Debug"
+    ],
+    "env": {}
+  },
+  {
+    "label": "CMake: Configure (Release)",
+    "command": "cmake",
+    "args": [
+      "-S",
+      "$ZED_WORKTREE_ROOT",
+      "-B",
+      "$ZED_WORKTREE_ROOT/build",
+      "-DCMAKE_BUILD_TYPE=Release"
+    ],
+    "env": {}
+  },
+  {
+    "label": "CMake: Build (Release)",
+    "command": "cmake",
+    "args": [
+      "--build",
+      "$ZED_WORKTREE_ROOT/build",
+      "--config",
+      "Release"
+    ],
+    "env": {}
+  }
+]

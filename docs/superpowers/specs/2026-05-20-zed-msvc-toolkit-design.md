@@ -59,7 +59,21 @@
 - 使用 `cmake --build build --config Debug` 构建。
 - 将命令输出呈现在 Zed 的终端或 task UI 中。
 
-### 阶段 4：V0.4 调试基础
+**状态**: ✅ 完成。命令生成基础设施已实现，待 Zed API 支持后即可暴露为用户命令。
+
+### 阶段 4：V0.4 任务系统
+
+绕过 Zed API 限制，通过 .zed/tasks.json 提供 CMake 命令。
+
+交付内容：
+
+- 生成 `.zed/tasks.json` 格式的 CMake configure 和 build 任务。
+- 使用 `$ZED_WORKTREE_ROOT` 变量引用工作区路径。
+- 支持 Debug/Release 构建类型配置。
+
+**状态**: ✅ 完成。`generate_tasks_json()` 函数已实现，用户可手动创建任务文件或等待未来 API 支持自动写入。
+
+### 阶段 5：V0.5 调试基础
 
 引入 MSVC DAP 支持，但暂不自动下载调试器。
 
@@ -70,7 +84,18 @@
 - 将调试配置映射为 DAP launch 请求。
 - 支持 `program`、`cwd`、`symbolPath`。
 
-### 阶段 5：V1.0 零配置调试
+### 阶段 5：V0.5 调试基础
+
+引入 MSVC DAP 支持，但暂不自动下载调试器。
+
+交付内容：
+
+- 注册 `msvc-cpp` debug adapter 类型。
+- 支持用户提供或本机探测到的 `vsdbg.exe`。
+- 将调试配置映射为 DAP launch 请求。
+- 支持 `program`、`cwd`、`symbolPath`。
+
+### 阶段 6：V1.0 零配置调试
 
 完成可发布级别的完整工作流。
 
@@ -208,12 +233,16 @@ V0.1 使用用户可读错误，不静默失败。
 
 真实 Zed 运行时集成测试推迟到扩展骨架能编译并能本地加载之后。
 
-## V0.1 明确不做
+## V0.1-V0.4 已完成
 
-- 不实现 CMake configure 或 build 命令。
-- 不探测 `compile_commands.json`。
-- 不注册 DAP。
-- 不下载 `vsdbg.exe`。
+- ✅ V0.1: MSVC 环境探测和 clangd 配置
+- ✅ V0.2: CMake `compile_commands.json` 自动探测
+- ✅ V0.3: CMake 命令生成基础设施
+- ✅ V0.4: `.zed/tasks.json` 任务系统支持
+
+## V0.5 明确不做
+
+- 不自动下载 `vsdbg.exe`。
 - 不合并已有 `.clangd` YAML。
 - 不承诺支持 Visual Studio 2019 或更旧版本。
 

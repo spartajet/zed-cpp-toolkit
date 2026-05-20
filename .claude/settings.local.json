@@ -3,7 +3,10 @@
     "allow": [
       "Bash(rtk cargo *)",
       "Bash(rtk git *)",
-      "Bash(rtk read *)"
+      "Bash(rtk read *)",
+      "Bash(rustup target *)",
+      "Bash(rtk ls *)",
+      "WebSearch"
     ]
   }
 }

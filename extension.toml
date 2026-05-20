@@ -1,7 +1,7 @@
 id = "zed-msvc-toolkit"
 name = "Zed MSVC C++ Assistant"
 description = "MSVC and clangd assistant for Windows C++ CMake projects in Zed."
-version = "0.3.0"
+version = "0.4.0"
 schema_version = 1
 authors = ["XRZB"]
 repository = "https://github.com/XRZB/zed-msvc-toolkit"
@@ -16,10 +16,5 @@ capabilities = [
 name = "MSVC clangd"
 languages = ["C", "C++"]
 
-# V0.3 注释：命令功能已准备好底层实现，待 Zed API 支持后即可启用
-# [commands."msvc-cpp: cmake configure"]
-# title = "CMake: Configure (Debug)"
-# description = "Configure CMake project with Debug build type"
-# [commands."msvc-cpp: cmake build"]
-# title = "CMake: Build (Debug)"
-# description = "Build CMake project with Debug configuration"
+# V0.4：CMake 任务通过 .zed/tasks.json 提供
+# 用户可以在任务面板（Ctrl+Shift+T）中运行 CMake configure 和 build 命令
