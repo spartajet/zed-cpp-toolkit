@@ -1,3 +1,5 @@
+use crate::environment::tools::{CommandRunner, powershell_list_directory_names};
+use crate::error::{ToolkitError, ToolkitResult};
 use crate::paths::highest_version_dir;
 
 pub fn select_msvc_include<'a>(
@@ -11,6 +13,16 @@ pub fn select_msvc_include<'a>(
             version = version
         )
     })
+}
+
+pub fn discover_msvc_include(runner: &impl CommandRunner, vs_root: &str) -> ToolkitResult<String> {
+    let tools_root = format!(
+        r"{vs_root}\VC\Tools\MSVC",
+        vs_root = vs_root.trim_end_matches('\\')
+    );
+    let versions = powershell_list_directory_names(runner, &tools_root)?;
+    select_msvc_include(versions.iter().map(String::as_str), vs_root)
+        .ok_or(ToolkitError::MissingMsvcToolset)
 }
 
 #[cfg(test)]

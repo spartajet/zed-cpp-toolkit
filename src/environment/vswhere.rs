@@ -1,5 +1,26 @@
+use crate::environment::tools::{CommandRunner, ensure_success};
+use crate::error::{ToolkitError, ToolkitResult};
+
 pub const VSWHERE_PATH: &str =
     r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe";
+
+pub fn discover_visual_studio(runner: &impl CommandRunner) -> ToolkitResult<String> {
+    let args = vec![
+        "-latest".to_string(),
+        "-version".to_string(),
+        "[17.0,)".to_string(),
+        "-property".to_string(),
+        "installationPath".to_string(),
+    ];
+    let output = runner
+        .run_command(VSWHERE_PATH, &args)
+        .map_err(|_| ToolkitError::MissingVswhere)?;
+    let stdout = ensure_success(VSWHERE_PATH, output).map_err(|error| match error {
+        ToolkitError::ProcessFailed { .. } => ToolkitError::MissingVisualStudio,
+        other => other,
+    })?;
+    parse_installation_path(&stdout).ok_or(ToolkitError::MissingVisualStudio)
+}
 
 pub fn parse_installation_path(stdout: &str) -> Option<String> {
     stdout
@@ -23,5 +44,33 @@ mod tests {
             parsed,
             Some("C:\\Program Files\\Microsoft Visual Studio\\2022\\Community".to_string())
         );
+    }
+
+    struct FakeRunner {
+        stdout: String,
+    }
+
+    impl CommandRunner for FakeRunner {
+        fn run_command(
+            &self,
+            _command: &str,
+            _args: &[String],
+        ) -> ToolkitResult<crate::environment::tools::CommandOutput> {
+            Ok(crate::environment::tools::CommandOutput {
+                status: Some(0),
+                stdout: self.stdout.clone(),
+                stderr: String::new(),
+            })
+        }
+    }
+
+    #[test]
+    fn discovers_visual_studio_from_vswhere_output() {
+        let discovered = discover_visual_studio(&FakeRunner {
+            stdout: "C:\\VS\\2022\\Community\n".to_string(),
+        })
+        .unwrap();
+
+        assert_eq!(discovered, "C:\\VS\\2022\\Community");
     }
 }

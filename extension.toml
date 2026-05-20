@@ -6,6 +6,11 @@ schema_version = 1
 authors = ["XRZB"]
 repository = "https://github.com/XRZB/zed-msvc-toolkit"
 
+capabilities = [
+  { kind = "process:exec", command = "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe", args = ["**"] },
+  { kind = "process:exec", command = "powershell", args = ["**"] },
+]
+
 [language_servers.msvc-cpp-clangd]
 name = "MSVC clangd"
 languages = ["C", "C++"]

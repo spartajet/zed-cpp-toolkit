@@ -1,3 +1,4 @@
+use crate::environment::tools::{CommandRunner, powershell_list_directory_names};
 use crate::paths::highest_version_dir;
 
 const SDK_INCLUDE_KINDS: [&str; 3] = ["ucrt", "um", "shared"];
@@ -21,6 +22,16 @@ pub fn select_windows_sdk_includes<'a>(
             )
         })
         .collect()
+}
+
+pub fn discover_windows_sdk_includes(runner: &impl CommandRunner) -> Vec<String> {
+    let kits_include_root = r"C:\Program Files (x86)\Windows Kits\10\Include";
+    match powershell_list_directory_names(runner, kits_include_root) {
+        Ok(versions) => {
+            select_windows_sdk_includes(versions.iter().map(String::as_str), kits_include_root)
+        }
+        Err(_) => Vec::new(),
+    }
 }
 
 #[cfg(test)]

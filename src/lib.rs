@@ -23,7 +23,8 @@ impl zed::Extension for MsvcToolkitExtension {
         lsp::server::validate_language_server_id(language_server_id.as_ref())
             .map_err(|error| error.user_message())?;
 
-        let _existing_clangd = worktree.read_text_file(".clangd").ok();
+        lsp::server::prepare_workspace_config_from_worktree(worktree)
+            .map_err(|error| error.user_message())?;
 
         lsp::server::command_from_worktree(worktree).map_err(|error| error.user_message())
     }

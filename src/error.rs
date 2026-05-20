@@ -9,6 +9,12 @@ pub enum ToolkitError {
     MissingVisualStudio,
     MissingMsvcToolset,
     MissingClangd,
+    MissingWorkspaceConfig(String),
+    ProcessFailed {
+        command: String,
+        status: Option<i32>,
+        stderr: String,
+    },
     IoMessage(String),
 }
 
@@ -32,6 +38,16 @@ impl ToolkitError {
             }
             Self::MissingClangd => {
                 "找不到 clangd。请安装 LLVM，或将 clangd.exe 加入 PATH。".to_string()
+            }
+            Self::MissingWorkspaceConfig(contents) => format!(
+                "当前 Zed extension API 不支持从扩展直接写入工作区 .clangd。请在工作区根目录手动创建 .clangd，内容如下：\n\n{contents}"
+            ),
+            Self::ProcessFailed {
+                command,
+                status,
+                stderr,
+            } => {
+                format!("执行外部命令失败：{command}，退出码：{status:?}，错误输出：{stderr}")
             }
             Self::IoMessage(message) => message.clone(),
         }
