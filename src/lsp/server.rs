@@ -1,3 +1,4 @@
+use crate::cmake::discover_compile_database;
 use crate::environment::discover_msvc_environment;
 use crate::environment::tools::{ZedCommandRunner, require_clangd};
 use crate::error::{ToolkitError, ToolkitResult};
@@ -42,9 +43,11 @@ pub fn prepare_workspace_config(
     }
 
     let environment = discover_msvc_environment(runner)?;
+    let compile_db_path = discover_compile_database(root_path);
     let input = ClangdConfigInput {
         msvc_include: environment.msvc_include,
         sdk_includes: environment.sdk_includes,
+        compile_database_path: compile_db_path,
     };
 
     match decide_clangd_file(root_path, None, &input) {

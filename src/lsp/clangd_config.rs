@@ -4,15 +4,30 @@ use crate::paths::clangd_include_arg;
 pub struct ClangdConfigInput {
     pub msvc_include: String,
     pub sdk_includes: Vec<String>,
+    pub compile_database_path: Option<String>,
 }
 
 pub fn render_clangd_config(input: &ClangdConfigInput) -> String {
     let mut output = String::new();
     output.push_str("# 由 Zed MSVC C++ Assistant 自动生成。\n");
     output
-        .push_str("# 如果需要自定义 clangd 行为，请编辑本文件；插件 V0.1 不会覆盖已有 .clangd。\n");
-    output.push_str("CompileFlags:\n");
-    output.push_str("  DriverMode: cl\n");
+        .push_str("# 如果需要自定义 clangd 行为，请编辑本文件；插件 V0.2 不会覆盖已有 .clangd。\n");
+
+    // 如果有编译数据库，优先使用
+    if let Some(db_path) = &input.compile_database_path {
+        output.push_str("# 检测到 compile_commands.json，使用编译数据库。\n");
+        output.push_str("CompileFlags:\n");
+        output.push_str(&format!(
+            "  CompilationDatabase: {}\n",
+            db_path.replace('\\', "/")
+        ));
+        output.push_str("  # 编译数据库包含完整 include 路径，以下仅作为备用。\n");
+        output.push_str("  DriverMode: cl\n");
+    } else {
+        output.push_str("CompileFlags:\n");
+        output.push_str("  DriverMode: cl\n");
+    }
+
     output.push_str("  Add:\n");
     output.push_str(&format!(
         "    - {}\n",
@@ -51,6 +66,7 @@ mod tests {
                 r"C:\Windows Kits\10\Include\10.0.22621.0\um".to_string(),
                 r"C:\Windows Kits\10\Include\10.0.22621.0\shared".to_string(),
             ],
+            compile_database_path: None,
         });
 
         assert!(rendered.contains("DriverMode: cl"));
@@ -66,6 +82,7 @@ mod tests {
         let rendered = render_clangd_config(&ClangdConfigInput {
             msvc_include: r"C:\VS\VC\Tools\MSVC\14.40.33807\include".to_string(),
             sdk_includes: Vec::new(),
+            compile_database_path: None,
         });
 
         assert!(rendered.contains("- /IC:/VS/VC/Tools/MSVC/14.40.33807/include"));
@@ -74,5 +91,30 @@ mod tests {
             rendered
                 .contains("# - /IC:/Program Files (x86)/Windows Kits/10/Include/<version>/ucrt")
         );
+    }
+
+    #[test]
+    fn renders_compilation_database_when_present() {
+        let rendered = render_clangd_config(&ClangdConfigInput {
+            msvc_include: r"C:\VS\VC\Tools\MSVC\14.40.33807\include".to_string(),
+            sdk_includes: Vec::new(),
+            compile_database_path: Some(r"C:\project\build".to_string()),
+        });
+
+        assert!(rendered.contains("检测到 compile_commands.json，使用编译数据库"));
+        assert!(rendered.contains("CompilationDatabase: C:/project/build"));
+        assert!(rendered.contains("编译数据库包含完整 include 路径，以下仅作为备用"));
+    }
+
+    #[test]
+    fn does_not_render_compilation_database_when_missing() {
+        let rendered = render_clangd_config(&ClangdConfigInput {
+            msvc_include: r"C:\VS\VC\Tools\MSVC\14.40.33807\include".to_string(),
+            sdk_includes: Vec::new(),
+            compile_database_path: None,
+        });
+
+        assert!(!rendered.contains("CompilationDatabase:"));
+        assert!(!rendered.contains("检测到 compile_commands.json"));
     }
 }

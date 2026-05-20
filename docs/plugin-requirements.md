@@ -116,7 +116,18 @@ Diagnostics:
 
 ---
 
-## V0.1 实施状态
+## 实施状态
+
+### V0.2 (已完成)
+
+V0.2 在 V0.1 基础上新增：
+- `compile_commands.json` 探测（根目录或 `build/` 子目录）
+- `CompilationDatabase` 配置生成
+- CMake 项目检测（`CMakeLists.txt` 存在性）
+
+详细文档：`docs/v0.1-usage.md`
+
+### V0.1 (已完成)
 
 V0.1 的设计与实施计划已拆分到：
 
