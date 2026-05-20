@@ -10,6 +10,9 @@ pub enum ToolkitError {
     MissingMsvcToolset,
     MissingClangd,
     MissingCmake,
+    MissingNeocmakelsp,
+    NeocmakeDownloadFailed(String),
+    NeocmakeConfigParseError(String),
     MissingTool(String),
     MissingWorkspaceConfig(String),
     ProcessFailed {
@@ -43,6 +46,15 @@ impl ToolkitError {
             }
             Self::MissingCmake => {
                 "找不到 cmake。请安装 CMake 并将其加入 PATH。".to_string()
+            }
+            Self::MissingNeocmakelsp => {
+                "找不到 neocmakelsp。将从 GitHub 下载。".to_string()
+            }
+            Self::NeocmakeDownloadFailed(url) => {
+                format!("下载 neocmakelsp 失败：{url}")
+            }
+            Self::NeocmakeConfigParseError(detail) => {
+                format!("解析 neocmake 配置失败：{detail}，将使用默认配置。")
             }
             Self::MissingTool(tool) => {
                 format!("找不到工具：{tool}。请确认已安装并加入 PATH。")
