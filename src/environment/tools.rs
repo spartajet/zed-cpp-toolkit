@@ -1,6 +1,13 @@
 use crate::error::{ToolkitError, ToolkitResult};
 use zed_extension_api as zed;
 
+/// 通用工具探测函数。
+///
+/// 检查工具路径是否有效（非空字符串）。
+pub fn require_tool(tool_path: Option<String>) -> ToolkitResult<String> {
+    tool_path.ok_or_else(|| ToolkitError::MissingTool(String::from("unknown")))
+}
+
 pub fn require_clangd(clangd_path: Option<String>) -> ToolkitResult<String> {
     clangd_path.ok_or(ToolkitError::MissingClangd)
 }

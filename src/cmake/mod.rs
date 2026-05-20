@@ -1,9 +1,17 @@
 //! CMake 集成模块。
 //!
-//! V0.2 实现 compile_commands.json 探测。
+//! V0.3 实现 CMake configure/build 命令支持。
 
 pub mod compile_db;
+pub mod tools;
 
 pub use compile_db::discover_compile_database;
 #[allow(dead_code)]
 pub use compile_db::has_cmake_lists;
+pub use tools::{
+    build_build_command,
+    build_configure_command,
+    discover_cmake,
+    select_generator,
+    CmakeBuildType, CmakeConfigureOptions, CmakeGenerator,
+};

@@ -9,6 +9,8 @@ pub enum ToolkitError {
     MissingVisualStudio,
     MissingMsvcToolset,
     MissingClangd,
+    MissingCmake,
+    MissingTool(String),
     MissingWorkspaceConfig(String),
     ProcessFailed {
         command: String,
@@ -38,6 +40,12 @@ impl ToolkitError {
             }
             Self::MissingClangd => {
                 "找不到 clangd。请安装 LLVM，或将 clangd.exe 加入 PATH。".to_string()
+            }
+            Self::MissingCmake => {
+                "找不到 cmake。请安装 CMake 并将其加入 PATH。".to_string()
+            }
+            Self::MissingTool(tool) => {
+                format!("找不到工具：{tool}。请确认已安装并加入 PATH。")
             }
             Self::MissingWorkspaceConfig(contents) => format!(
                 "当前 Zed extension API 不支持从扩展直接写入工作区 .clangd。请在工作区根目录手动创建 .clangd，内容如下：\n\n{contents}"

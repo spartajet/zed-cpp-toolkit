@@ -1,7 +1,7 @@
 id = "zed-msvc-toolkit"
 name = "Zed MSVC C++ Assistant"
 description = "MSVC and clangd assistant for Windows C++ CMake projects in Zed."
-version = "0.1.0"
+version = "0.3.0"
 schema_version = 1
 authors = ["XRZB"]
 repository = "https://github.com/XRZB/zed-msvc-toolkit"
@@ -9,8 +9,17 @@ repository = "https://github.com/XRZB/zed-msvc-toolkit"
 capabilities = [
   { kind = "process:exec", command = "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe", args = ["**"] },
   { kind = "process:exec", command = "powershell", args = ["**"] },
+  { kind = "process:exec", command = "cmake", args = ["**"] },
 ]
 
 [language_servers.msvc-cpp-clangd]
 name = "MSVC clangd"
 languages = ["C", "C++"]
+
+# V0.3 注释：命令功能已准备好底层实现，待 Zed API 支持后即可启用
+# [commands."msvc-cpp: cmake configure"]
+# title = "CMake: Configure (Debug)"
+# description = "Configure CMake project with Debug build type"
+# [commands."msvc-cpp: cmake build"]
+# title = "CMake: Build (Debug)"
+# description = "Build CMake project with Debug configuration"
