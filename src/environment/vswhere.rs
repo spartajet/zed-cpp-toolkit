@@ -48,14 +48,18 @@ mod tests {
 
     struct FakeRunner {
         stdout: String,
+        calls: std::cell::RefCell<Vec<(String, Vec<String>)>>,
     }
 
     impl CommandRunner for FakeRunner {
         fn run_command(
             &self,
-            _command: &str,
-            _args: &[String],
+            command: &str,
+            args: &[String],
         ) -> ToolkitResult<crate::environment::tools::CommandOutput> {
+            self.calls
+                .borrow_mut()
+                .push((command.to_string(), args.to_vec()));
             Ok(crate::environment::tools::CommandOutput {
                 status: Some(0),
                 stdout: self.stdout.clone(),
@@ -68,9 +72,28 @@ mod tests {
     fn discovers_visual_studio_from_vswhere_output() {
         let discovered = discover_visual_studio(&FakeRunner {
             stdout: "C:\\VS\\2022\\Community\n".to_string(),
+            calls: std::cell::RefCell::new(Vec::new()),
         })
         .unwrap();
 
         assert_eq!(discovered, "C:\\VS\\2022\\Community");
+    }
+
+    #[test]
+    fn invokes_vswhere_for_latest_visual_studio_2022_or_newer() {
+        let runner = FakeRunner {
+            stdout: "C:\\VS\\2022\\Community\n".to_string(),
+            calls: std::cell::RefCell::new(Vec::new()),
+        };
+
+        let _ = discover_visual_studio(&runner).unwrap();
+        let calls = runner.calls.borrow();
+
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, VSWHERE_PATH);
+        assert_eq!(
+            calls[0].1,
+            vec!["-latest", "-version", "[17.0,)", "-property", "installationPath"]
+        );
     }
 }

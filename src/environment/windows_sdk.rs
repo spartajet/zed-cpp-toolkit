@@ -28,7 +28,21 @@ pub fn discover_windows_sdk_includes(runner: &impl CommandRunner) -> Vec<String>
     let kits_include_root = r"C:\Program Files (x86)\Windows Kits\10\Include";
     match powershell_list_directory_names(runner, kits_include_root) {
         Ok(versions) => {
-            select_windows_sdk_includes(versions.iter().map(String::as_str), kits_include_root)
+            let Some(version) = highest_version_dir(versions.iter().map(String::as_str)) else {
+                return Vec::new();
+            };
+            let version_root = format!(r"{kits_include_root}\{version}");
+            let Ok(children) = powershell_list_directory_names(runner, &version_root) else {
+                return Vec::new();
+            };
+            if SDK_INCLUDE_KINDS
+                .iter()
+                .all(|kind| children.iter().any(|child| child.eq_ignore_ascii_case(kind)))
+            {
+                select_windows_sdk_includes([version], kits_include_root)
+            } else {
+                Vec::new()
+            }
         }
         Err(_) => Vec::new(),
     }
@@ -37,6 +51,10 @@ pub fn discover_windows_sdk_includes(runner: &impl CommandRunner) -> Vec<String>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::environment::tools::{CommandOutput, CommandRunner};
+    use crate::error::ToolkitResult;
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
 
     #[test]
     fn selects_highest_sdk_include_group() {
@@ -59,6 +77,47 @@ mod tests {
     fn returns_empty_includes_when_sdk_versions_are_missing() {
         let includes =
             select_windows_sdk_includes([], r"C:\Program Files (x86)\Windows Kits\10\Include");
+
+        assert!(includes.is_empty());
+    }
+
+    struct QueueRunner {
+        outputs: RefCell<VecDeque<CommandOutput>>,
+    }
+
+    impl QueueRunner {
+        fn new(outputs: impl IntoIterator<Item = CommandOutput>) -> Self {
+            Self {
+                outputs: RefCell::new(outputs.into_iter().collect()),
+            }
+        }
+    }
+
+    impl CommandRunner for QueueRunner {
+        fn run_command(&self, _command: &str, _args: &[String]) -> ToolkitResult<CommandOutput> {
+            self.outputs
+                .borrow_mut()
+                .pop_front()
+                .ok_or_else(|| crate::error::ToolkitError::IoMessage("unexpected command".to_string()))
+        }
+    }
+
+    #[test]
+    fn returns_empty_includes_when_selected_sdk_version_is_incomplete() {
+        let runner = QueueRunner::new([
+            CommandOutput {
+                status: Some(0),
+                stdout: "10.0.22621.0\n".to_string(),
+                stderr: String::new(),
+            },
+            CommandOutput {
+                status: Some(0),
+                stdout: "ucrt\nshared\n".to_string(),
+                stderr: String::new(),
+            },
+        ]);
+
+        let includes = discover_windows_sdk_includes(&runner);
 
         assert!(includes.is_empty());
     }

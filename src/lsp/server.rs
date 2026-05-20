@@ -153,6 +153,11 @@ mod tests {
                 stdout: "10.0.19041.0\n10.0.22621.0\n".to_string(),
                 stderr: String::new(),
             },
+            CommandOutput {
+                status: Some(0),
+                stdout: "ucrt\num\nshared\n".to_string(),
+                stderr: String::new(),
+            },
         ]);
 
         let error = prepare_workspace_config("C:/repo", None, &runner).unwrap_err();

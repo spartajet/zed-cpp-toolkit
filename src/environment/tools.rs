@@ -85,10 +85,14 @@ mod tests {
 
     struct FakeRunner {
         output: CommandOutput,
+        calls: std::cell::RefCell<Vec<(String, Vec<String>)>>,
     }
 
     impl CommandRunner for FakeRunner {
-        fn run_command(&self, _command: &str, _args: &[String]) -> ToolkitResult<CommandOutput> {
+        fn run_command(&self, command: &str, args: &[String]) -> ToolkitResult<CommandOutput> {
+            self.calls
+                .borrow_mut()
+                .push((command.to_string(), args.to_vec()));
             Ok(self.output.clone())
         }
     }
@@ -101,10 +105,32 @@ mod tests {
                 stdout: "14.38.33130\r\n14.40.33807\r\n".to_string(),
                 stderr: String::new(),
             },
+            calls: std::cell::RefCell::new(Vec::new()),
         };
 
         let names = powershell_list_directory_names(&runner, r"C:\MSVC").unwrap();
 
         assert_eq!(names, vec!["14.38.33130", "14.40.33807"]);
+    }
+
+    #[test]
+    fn invokes_powershell_with_literal_path_directory_listing() {
+        let runner = FakeRunner {
+            output: CommandOutput {
+                status: Some(0),
+                stdout: String::new(),
+                stderr: String::new(),
+            },
+            calls: std::cell::RefCell::new(Vec::new()),
+        };
+
+        let _ = powershell_list_directory_names(&runner, r"C:\Program Files\SDK").unwrap();
+        let calls = runner.calls.borrow();
+
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "powershell");
+        assert_eq!(calls[0].1[0], "-NoProfile");
+        assert_eq!(calls[0].1[1], "-Command");
+        assert!(calls[0].1[2].contains("Get-ChildItem -LiteralPath 'C:\\Program Files\\SDK' -Directory"));
     }
 }
