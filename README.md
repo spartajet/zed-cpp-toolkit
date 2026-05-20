@@ -10,6 +10,7 @@ MSVC and clangd assistant for Windows C++ CMake projects in Zed.
 - **V0.2**: CMake `compile_commands.json` auto-detection
 - **V0.3**: CMake command generation infrastructure
 - **V0.4**: `.zed/tasks.json` generation for CMake operations
+- **V0.5**: neocmakelsp integration for CMake language support
 
 ## Documentation
 
@@ -40,6 +41,42 @@ cp docs/zed-tasks-example.json .zed/tasks.json
 ```
 
 Then run tasks via `Ctrl+Shift+T` (Task: Run).
+
+### CMake Language Support
+
+The extension includes [neocmakelsp](https://github.com/neocmakelsp/neocmakelsp) for CMake language support (`CMakeLists.txt` files).
+
+**Installation:**
+- If `neocmakelsp` is in your PATH, it will be used directly.
+- Otherwise, the extension will automatically download it from GitHub Releases to `%LOCALAPPDATA%\zed-msvc-toolkit\neocmakelsp\`.
+
+**Configuration:**
+
+neocmakelsp can be configured via two sources (settings.json overrides .neocmake.toml):
+
+1. **Project-level** (`.neocmake.toml` in project root):
+   ```toml
+   [format]
+   enable = true
+
+   [lint]
+   enable = true
+
+   scan_cmake_in_package = true
+   semantic_token = false
+   ```
+
+2. **Workspace-level** (`.zed/settings.json`):
+   ```json
+   {
+     "lsp": {
+       "msvc-cmake-neocmake": {
+         "format": { "enable": false },
+         "lint": { "enable": true }
+       }
+     }
+   }
+   ```
 
 ## Requirements
 
