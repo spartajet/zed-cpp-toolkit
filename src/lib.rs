@@ -3,6 +3,7 @@ use zed_extension_api as zed;
 mod cmake;
 mod debug;
 mod error;
+mod lsp;
 mod paths;
 
 #[derive(Default)]
