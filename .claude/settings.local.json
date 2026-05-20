@@ -7,7 +7,9 @@
       "Bash(rustup target *)",
       "Bash(rtk ls *)",
       "WebSearch",
-      "Bash(rtk find *)"
+      "Bash(rtk find *)",
+      "mcp__plugin_microsoft-docs_microsoft-learn__microsoft_docs_search",
+      "mcp__web-search-prime__web_search_prime"
     ]
   }
 }
