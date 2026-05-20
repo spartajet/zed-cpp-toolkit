@@ -6,7 +6,8 @@
       "Bash(rtk read *)",
       "Bash(rustup target *)",
       "Bash(rtk ls *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(rtk find *)"
     ]
   }
 }
