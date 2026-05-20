@@ -2,6 +2,7 @@ use zed_extension_api as zed;
 
 mod cmake;
 mod debug;
+mod environment;
 mod error;
 mod lsp;
 mod paths;
