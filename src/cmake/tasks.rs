@@ -80,13 +80,13 @@ fn powershell_task(label: String, script: String) -> serde_json::Value {
     json!({
         "label": label,
         "command": "powershell",
-        "cwd": "$ZED_WORKTREE_ROOT",
         "args": [
             "-NoProfile",
             "-Command",
             script
         ],
-        "env": {}
+        "env": {},
+        "cwd": "$ZED_WORKTREE_ROOT"
     })
 }
 
@@ -115,9 +115,9 @@ fn build_script(options: &TaskOptions, target: Option<&str>) -> String {
 fn run_script(options: &TaskOptions, output: &str) -> String {
     let output = output.replace('/', "\\");
     format!(
-        "$ErrorActionPreference='Stop'; & (Join-Path $env:ZED_WORKTREE_ROOT '{}\\{}')",
+        "& \"$ZED_WORKTREE_ROOT\\{}\\{}\"",
         options.build_dir.replace('\'', "''"),
-        output.replace('\'', "''")
+        output.replace('"', "`\"")
     )
 }
 
@@ -131,10 +131,7 @@ fn developer_environment_script(options: &TaskOptions, command: &str) -> String 
         command.to_string()
     };
 
-    format!(
-        "$ErrorActionPreference='Stop'; & cmd.exe /S /C {}",
-        powershell_single_quote(&cmd_line)
-    )
+    format!("& cmd.exe /S /C {}", powershell_single_quote(&cmd_line))
 }
 
 fn powershell_single_quote(value: &str) -> String {
@@ -168,6 +165,17 @@ mod tests {
         assert_eq!(parsed.as_array().unwrap().len(), 2);
         assert_eq!(parsed[0]["label"], "CMake: Configure (Debug)");
         assert_eq!(parsed[1]["label"], "CMake: Build (Debug)");
+    }
+
+    #[test]
+    fn tasks_keep_documented_field_order() {
+        let options = TaskOptions::default();
+        let json = generate_tasks_json(&options).unwrap();
+
+        assert!(json.contains(
+            "{\n    \"label\": \"CMake: Configure (Debug)\",\n    \"command\": \"powershell\",\n    \"args\":"
+        ));
+        assert!(json.contains("\n    \"env\": {},\n    \"cwd\": \"$ZED_WORKTREE_ROOT\""));
     }
 
     #[test]
@@ -243,6 +251,12 @@ mod tests {
         assert_eq!(parsed[2]["label"], "CMake: Build Target: app");
         assert_eq!(parsed[3]["label"], "CMake: Run: app");
         assert!(parsed[3]["args"][2].as_str().unwrap().contains("app.exe"));
+        assert!(
+            !parsed[3]["args"][2]
+                .as_str()
+                .unwrap()
+                .contains("$ErrorActionPreference")
+        );
     }
 
     #[test]
@@ -259,6 +273,12 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("VsDevCmd.bat")
+        );
+        assert!(
+            !parsed[0]["args"][2]
+                .as_str()
+                .unwrap()
+                .contains("$ErrorActionPreference")
         );
     }
 }
