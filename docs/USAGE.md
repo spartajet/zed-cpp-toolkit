@@ -5,29 +5,36 @@
 ### 1. 编译扩展
 
 ```bash
-# 添加 WASM 目标
+# 添加 WASM 目标（必须通过 rustup 安装 Rust）
 rustup target add wasm32-unknown-unknown
 
 # 编译 Release 版本
 cargo build --target wasm32-unknown-unknown --release
 ```
 
-### 2. 安装到 Zed
+### 2. 作为 Dev Extension 安装
 
-将编译好的 WASM 文件复制到 Zed 扩展目录：
+Zed 支持本地开发扩展（Dev Extension），无需发布即可使用：
 
-```bash
-# 创建扩展目录
-mkdir -p "$USERPROFILE/.zed/extensions/zed-msvc-toolkit"
+1. 在 Zed 中打开扩展面板：`Ctrl+Shift+X`
+2. 点击 `Install Dev Extension` 按钮
+3. 选择项目根目录 `E:\Rust\zed-msvc-toolkit`
+4. Zed 会自动编译并加载扩展
 
-# 复制文件
-cp target/wasm32-unknown-unknown/release/zed_msvc_toolkit.wasm "$USERPROFILE/.zed/extensions/zed-msvc-toolkit/"
-cp extension.toml "$USERPROFILE/.zed/extensions/zed-msvc-toolkit/"
-```
+**注意**：
+- 项目必须是 Git 仓库
+- Rust 必须通过 rustup 安装（不能通过其他方式如 homebrew）
+- 如需调试日志，使用 `zed --foreground` 启动 Zed
 
-### 3. 重启 Zed
+### 3. 发布到扩展市场
 
-重启 Zed 编辑器以加载扩展。
+发布扩展需要 PR 到 `zed-industries/extensions` 仓库：
+
+1. 将项目推送到公开的 GitHub 仓库
+2. Fork `zed-industries/extensions` 仓库
+3. 作为 Git submodule 添加你的扩展
+4. 更新 `extensions.toml`
+5. 提交 PR
 
 ## 系统要求
 
