@@ -83,10 +83,7 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed.as_array().unwrap().len(), 2);
-        assert_eq!(
-            parsed[0]["label"],
-            "CMake: Configure (Debug)"
-        );
+        assert_eq!(parsed[0]["label"], "CMake: Configure (Debug)");
         assert_eq!(parsed[1]["label"], "CMake: Build (Debug)");
     }
 

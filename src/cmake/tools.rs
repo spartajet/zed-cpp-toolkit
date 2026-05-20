@@ -55,10 +55,7 @@ impl CmakeGenerator {
     pub fn as_args(&self) -> Vec<String> {
         match self {
             Self::Ninja => vec!["-G".to_string(), "Ninja".to_string()],
-            Self::VisualStudio2022 => vec![
-                "-G".to_string(),
-                "Visual Studio 17 2022".to_string(),
-            ],
+            Self::VisualStudio2022 => vec!["-G".to_string(), "Visual Studio 17 2022".to_string()],
         }
     }
 }
@@ -184,14 +181,20 @@ mod tests {
     fn build_type_produces_correct_cmake_var() {
         assert_eq!(CmakeBuildType::Debug.as_cmake_var(), "Debug");
         assert_eq!(CmakeBuildType::Release.as_cmake_var(), "Release");
-        assert_eq!(CmakeBuildType::RelWithDebInfo.as_cmake_var(), "RelWithDebInfo");
+        assert_eq!(
+            CmakeBuildType::RelWithDebInfo.as_cmake_var(),
+            "RelWithDebInfo"
+        );
     }
 
     #[test]
     fn build_type_produces_correct_build_arg() {
         assert_eq!(CmakeBuildType::Debug.as_build_arg(), "Debug");
         assert_eq!(CmakeBuildType::Release.as_build_arg(), "Release");
-        assert_eq!(CmakeBuildType::RelWithDebInfo.as_build_arg(), "RelWithDebInfo");
+        assert_eq!(
+            CmakeBuildType::RelWithDebInfo.as_build_arg(),
+            "RelWithDebInfo"
+        );
     }
 
     #[test]
