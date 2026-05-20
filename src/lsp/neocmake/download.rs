@@ -1,7 +1,10 @@
-//! 从 GitHub Releases 下载 neocmakelsp 二进制。
+//! neocmakelsp 二进制查找和下载。
+//!
+//! 使用 PowerShell 命令从 GitHub Releases 下载 neocmakelsp。
 
 use crate::debug::log_message;
 use crate::error::{ToolkitError, ToolkitResult};
+use crate::environment::tools::{CommandRunner, ZedCommandRunner};
 use zed_extension_api as zed;
 
 const GITHUB_REPO: &str = "neocmakelsp/neocmakelsp";
@@ -28,63 +31,136 @@ fn platform_asset_name() -> Option<&'static str> {
         all(target_os = "macos", target_arch = "aarch64"),
     )))]
     {
-        log_message("neocmakelsp: 不支持的平台无法下载");
         None
     }
 }
 
+/// 获取用户本地程序目录（用于存放下载的二进制）。
+fn get_local_binary_dir() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        // 使用 %LOCALAPPDATA%\zed-msvc-toolkit
+        std::env::var("LOCALAPPDATA")
+            .map(|p| format!("{p}\\zed-msvc-toolkit\\neocmakelsp"))
+            .unwrap_or_else(|_| ".\\neocmakelsp".to_string())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::env::var("HOME")
+            .map(|p| format!("{p}/.local/share/zed-msvc-toolkit/neocmakelsp"))
+            .unwrap_or_else(|_| "./neocmakelsp".to_string())
+    }
+}
+
 /// 从 GitHub Releases 下载 neocmakelsp 二进制。
-pub fn download_binary() -> ToolkitResult<String> {
+fn download_binary() -> ToolkitResult<String> {
     let asset_name = platform_asset_name()
         .ok_or_else(|| ToolkitError::NeocmakeDownloadFailed("不支持的平台".to_string()))?;
 
     log_message(&format!("从 GitHub releases 下载 neocmakelsp，资源: {asset_name}"));
 
-    let release = zed::latest_github_release(GITHUB_REPO)
-        .map_err(|e| ToolkitError::NeocmakeDownloadFailed(format!("获取 release: {e}")))?;
-
-    log_message(&format!("最新版本: {}", release.version));
-
-    let asset = release.assets
-        .iter()
-        .find(|a| a.name == asset_name)
-        .ok_or_else(|| {
-            ToolkitError::NeocmakeDownloadFailed(format!("release 中未找到资源 {asset_name}"))
-        })?;
-
-    let extension_dir = zed::extensions_dir();
-    let target_dir = format!("{extension_dir}/neocmakelsp");
-    let _ = zed::make_dir(&target_dir);
-
-    let binary_path = format!("{target_dir}/{BINARY_NAME}");
+    let target_dir = get_local_binary_dir();
+    let binary_path = format!("{target_dir}\\{BINARY_NAME}");
 
     // 检查是否已存在
-    if let Ok(true) = zed::file_exists(&binary_path) {
+    if std::path::Path::new(&binary_path).exists() {
         log_message(&format!("neocmakelsp 已存在于: {binary_path}"));
         return Ok(binary_path);
     }
 
-    log_message(&format!("下载资源到: {binary_path}"));
-    let downloaded_path = zed::download_file(
-        &asset.download_url,
-        &target_dir,
-        Some(BINARY_NAME),
-    )
-        .map_err(|e| ToolkitError::NeocmakeDownloadFailed(format!("下载: {e}")))?;
+    // 构建下载 URL
+    let download_url = format!(
+        "https://github.com/{}/releases/latest/download/{}",
+        GITHUB_REPO, asset_name
+    );
 
-    log_message(&format!("已下载到: {downloaded_path}"));
+    log_message(&format!("下载 URL: {download_url}"));
+    log_message(&format!("目标目录: {target_dir}"));
 
-    // 在 Windows 上处理 .zip 解压
-    if asset_name.ends_with(".zip") {
-        log_message("从 zip 压缩包中提取 neocmakelsp");
-        // Zed 的 download_file 会自动解压 zip，二进制应该在 binary_path
+    // 使用 PowerShell 下载
+    let runner = ZedCommandRunner;
+
+    // 创建目标目录
+    let mkdir_script = format!(
+        "$ErrorActionPreference='Stop'; New-Item -ItemType Directory -Force -Path '{}' | Out-Null; 'created'",
+        target_dir.replace('\\', "\\\\").replace('\'', "''")
+    );
+    let mkdir_args = vec![
+        "-NoProfile".to_string(),
+        "-Command".to_string(),
+        mkdir_script,
+    ];
+
+    if let Err(e) = runner.run_command("powershell", &mkdir_args) {
+        log_message(&format!("创建目录失败（可能已存在）: {e}"));
     }
 
-    zed::make_file_executable(&downloaded_path)
-        .map_err(|e| ToolkitError::NeocmakeDownloadFailed(format!("设置可执行: {e}")))?;
+    // 下载文件
+    let download_script = format!(
+        "$ErrorActionPreference='Stop'; \
+         $ProgressPreference = 'SilentlyContinue'; \
+         $url = '{}'; \
+         $out = '{}'; \
+         $dir = Split-Path -Parent $out; \
+         if ($dir) {{ New-Item -ItemType Directory -Force -Path $dir | Out-Null }}; \
+         Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing; \
+         'downloaded'",
+        download_url.replace('\'', "''"),
+        binary_path.replace('\\', "\\\\").replace('\'', "''")
+    );
 
-    log_message(&format!("neocmakelsp 就绪于: {downloaded_path}"));
-    Ok(downloaded_path)
+    let download_args = vec![
+        "-NoProfile".to_string(),
+        "-Command".to_string(),
+        download_script,
+    ];
+
+    let output = runner.run_command("powershell", &download_args)
+        .map_err(|e| ToolkitError::NeocmakeDownloadFailed(format!("执行下载命令: {e}")))?;
+
+    if output.status != Some(0) {
+        return Err(ToolkitError::NeocmakeDownloadFailed(format!(
+            "下载失败: {}", output.stderr
+        )));
+    }
+
+    log_message(&format!("已下载到: {binary_path}"));
+
+    // 如果是 .zip 文件，需要解压
+    if asset_name.ends_with(".zip") {
+        log_message("解压 zip 文件");
+
+        let unzip_script = format!(
+            "$ErrorActionPreference='Stop'; \
+             $zip = '{}'; \
+             $dest = '{}'; \
+             Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force; \
+             'unzipped'",
+            binary_path.replace('\\', "\\\\").replace('\'', "''"),
+            target_dir.replace('\\', "\\\\").replace('\'', "''")
+        );
+
+        let unzip_args = vec![
+            "-NoProfile".to_string(),
+            "-Command".to_string(),
+            unzip_script,
+        ];
+
+        let output = runner.run_command("powershell", &unzip_args)
+            .map_err(|e| ToolkitError::NeocmakeDownloadFailed(format!("解压: {e}")))?;
+
+        if output.status != Some(0) {
+            return Err(ToolkitError::NeocmakeDownloadFailed(format!(
+                "解压失败: {}", output.stderr
+            )));
+        }
+
+        log_message("解压完成");
+    }
+
+    log_message(&format!("neocmakelsp 就绪于: {binary_path}"));
+    Ok(binary_path)
 }
 
 /// 在 PATH 中查找 neocmakelsp 或下载它。
