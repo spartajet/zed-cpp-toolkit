@@ -16,10 +16,12 @@ fn get_asset_name() -> ToolkitResult<String> {
     let arch_str = match arch {
         zed::Architecture::X8664 => "x86_64",
         zed::Architecture::Aarch64 => "aarch64",
-        _ => return Err(ToolkitError::NeocmakeDownloadFailed(format!(
-            "不支持的架构: {:?}",
-            arch
-        ))),
+        _ => {
+            return Err(ToolkitError::NeocmakeDownloadFailed(format!(
+                "不支持的架构: {:?}",
+                arch
+            )));
+        }
     };
 
     let os_str = match platform {
@@ -92,7 +94,9 @@ fn download_binary(language_server_id: &zed::LanguageServerId) -> ToolkitResult<
 
 /// 清理旧版本的 LSP 二进制。
 fn cleanup_old_binaries(current_version: &str) {
-    log_message(&format!("清理旧版本的 neocmakelsp (保留 {current_version})"));
+    log_message(&format!(
+        "清理旧版本的 neocmakelsp (保留 {current_version})"
+    ));
 
     let entries = match std::fs::read_dir(".") {
         Ok(entries) => entries,

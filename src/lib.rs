@@ -23,7 +23,9 @@ impl zed::Extension for MsvcToolkitExtension {
                 debug::log_message(&format!("Git is available: {version}"));
             }
             Err(e) => {
-                debug::log_message(&format!("Git is NOT available: {e}. Grammar download may fail."));
+                debug::log_message(&format!(
+                    "Git is NOT available: {e}. Grammar download may fail."
+                ));
             }
         }
 
@@ -50,18 +52,20 @@ impl zed::Extension for MsvcToolkitExtension {
         // 根据 ID 路由到对应的 LSP
         let result = match language_server_id {
             "msvc-cpp-clangd" => {
-                if let Err(error_msg) = validate_and_prepare_clangd(worktree, language_server_id_value) {
+                if let Err(error_msg) =
+                    validate_and_prepare_clangd(worktree, language_server_id_value)
+                {
                     return Err(error_msg);
                 }
-                lsp::server::command_from_worktree(worktree)
-                    .map_err(|e| e.user_message())
+                lsp::server::command_from_worktree(worktree).map_err(|e| e.user_message())
             }
             "msvc-cmake-neocmake" => {
-                if let Err(error_msg) = validate_and_prepare_neocmake(worktree, language_server_id_value) {
+                if let Err(error_msg) =
+                    validate_and_prepare_neocmake(worktree, language_server_id_value)
+                {
                     return Err(error_msg);
                 }
-                lsp::neocmake::server::command_from_worktree(worktree, language_server_id_value)
-                    .map_err(|e| e.user_message())
+                lsp::neocmake::server::command_from_worktree(worktree).map_err(|e| e.user_message())
             }
             _ => {
                 let error = format!("不支持的 language server: {language_server_id}");
@@ -96,6 +100,22 @@ impl zed::Extension for MsvcToolkitExtension {
                 );
                 Err(error)
             }
+        }
+    }
+
+    fn language_server_initialization_options(
+        &mut self,
+        language_server_id: &zed::LanguageServerId,
+        worktree: &zed::Worktree,
+    ) -> zed::Result<Option<serde_json::Value>> {
+        match language_server_id.as_ref() {
+            "msvc-cmake-neocmake" => {
+                let config = lsp::neocmake::config::load_config(worktree);
+                let options = lsp::neocmake::init_options::build_init_options(&config);
+                debug::log_message(&format!("neocmakelsp 初始化选项: {options}"));
+                Ok(Some(options))
+            }
+            _ => Ok(None),
         }
     }
 }

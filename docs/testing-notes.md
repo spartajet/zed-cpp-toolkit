@@ -24,10 +24,10 @@ cargo build
    - 如果 neocmakelsp 在 PATH 中
    - 预期: 日志显示 "在 PATH 中找到 neocmakelsp: ..."
 
-3. **GitHub 下载回退**
+3. **PATH 缺失提示**
    - 如果 neocmakelsp 不在 PATH 中
-   - 预期: 日志显示 "PATH 中未找到 neocmakelsp，尝试下载"
-   - 预期: PowerShell 下载并安装到 %LOCALAPPDATA%\zed-msvc-toolkit\neocmakelsp\
+   - 预期: LSP 启动失败并提示安装 neocmakelsp 后加入 PATH
+   - 自动下载是后续阶段，不在当前版本启用
 
 4. **.neocmake.toml 配置**
    - 创建项目根目录的 `.neocmake.toml`:
@@ -38,8 +38,8 @@ cargo build
      [lint]
      enable = true
      ```
-   - 预期: 日志显示 "读取 .neocmake.toml"
-   - 预期: 日志显示 "最终 neocmake 配置: format.enable=false, ..."
+   - 预期: neocmakelsp 自己读取该文件
+   - 预期: 扩展不会解析或合并 `.neocmake.toml`
 
 5. **settings.json 覆盖**
    - 创建 `.zed/settings.json`:
@@ -67,7 +67,7 @@ cargo build
 | 扩展编译 | ✅ 通过 |
 | CMake LSP 激活 | ⏳ 待用户在 Zed 中测试 |
 | PATH 查找 | ⏳ 待用户在 Zed 中测试 |
-| GitHub 下载 | ⏳ 待用户在 Zed 中测试 |
+| PATH 缺失提示 | ⏳ 待用户在 Zed 中测试 |
 | .neocmake.toml 配置 | ⏳ 待用户在 Zed 中测试 |
 | settings.json 覆盖 | ⏳ 待用户在 Zed 中测试 |
 | clangd 兼容性 | ⏳ 待用户在 Zed 中测试 |
@@ -99,3 +99,4 @@ cargo build
 - 扩展编译为 `target/debug/zed-msvc-toolkit.dll`
 - 需要将此 DLL 复制到 Zed 扩展目录进行测试
 - Zed 扩展目录通常位于 `%ZED_USER_EXTENSIONS_DIR%`
+- 当前 neocmakelsp 集成是 PATH-only。请先运行 `cargo install neocmakelsp`，并确认 `neocmakelsp` 在 PATH 中。

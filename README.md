@@ -47,14 +47,17 @@ Then run tasks via `Ctrl+Shift+T` (Task: Run).
 The extension includes [neocmakelsp](https://github.com/neocmakelsp/neocmakelsp) for CMake language support (`CMakeLists.txt` files).
 
 **Installation:**
-- If `neocmakelsp` is in your PATH, it will be used directly.
-- Otherwise, the extension will automatically download it from GitHub Releases to `%LOCALAPPDATA%\zed-msvc-toolkit\neocmakelsp\`.
+- Install `neocmakelsp` yourself and make sure it is available in `PATH`:
+  ```bash
+  cargo install neocmakelsp
+  ```
+- Automatic download is planned for a later phase and is not enabled in the current integration.
 
 **Configuration:**
 
-neocmakelsp can be configured via two sources (settings.json overrides .neocmake.toml):
+neocmakelsp can be configured in two layers:
 
-1. **Project-level** (`.neocmake.toml` in project root):
+1. **Project-level** (`.neocmake.toml` in project root, read by neocmakelsp itself):
    ```toml
    [format]
    enable = true
@@ -66,7 +69,7 @@ neocmakelsp can be configured via two sources (settings.json overrides .neocmake
    semantic_token = false
    ```
 
-2. **Workspace-level** (`.zed/settings.json`):
+2. **Zed initialization options** (`.zed/settings.json`, read by this extension):
    ```json
    {
      "lsp": {
