@@ -1,14 +1,14 @@
-//! neocmakelsp LSP 集成模块。
+//! neocmakelsp LSP integration module.
 //!
-//! 通过 neocmakelsp 提供 CMake 语言支持，支持双重安装
-//!（PATH + GitHub 下载）和双重配置（.neocmake.toml + settings.json）。
+//! Provides CMake language support via neocmakelsp, supporting dual installation
+//! (PATH + GitHub download) and dual configuration (.neocmake.toml + settings.json).
 
 pub mod config;
 pub mod download;
 pub mod init_options;
 pub mod server;
 
-// 便捷导出（可通过 lsp::neocmake::command_from_worktree 调用）
+// Convenience exports (callable via lsp::neocmake::command_from_worktree)
 #[allow(dead_code)]
 #[allow(unused_imports)]
 pub use server::command_from_worktree;

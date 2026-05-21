@@ -1,11 +1,11 @@
-//! neocmakelsp LSP 初始化选项。
+//! neocmakelsp LSP initialization options.
 
-// FeatureConfig 在测试中使用
+// FeatureConfig is used in tests
 #[allow(unused_imports)]
 use crate::lsp::neocmake::config::{FeatureConfig, NeocmakeConfig};
 use serde_json::Value;
 
-/// 从配置构建 LSP 初始化选项。
+/// Builds LSP initialization options from configuration.
 pub fn build_init_options(config: &NeocmakeConfig) -> Value {
     serde_json::json!({
         "format": {

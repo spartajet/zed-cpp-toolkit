@@ -1,16 +1,16 @@
-//! 从 Zed settings.json 读取 neocmakelsp 初始化配置。
+//! Reads neocmakelsp initialization configuration from Zed settings.json.
 
 use crate::debug::log_message;
 use serde_json::Value;
 use zed_extension_api as zed;
 
-/// 功能开关配置。
+/// Feature toggle configuration.
 #[derive(Debug, Clone, Default)]
 pub struct FeatureConfig {
     pub enable: bool,
 }
 
-/// neocmakelsp 配置。
+/// neocmakelsp configuration.
 #[derive(Debug, Clone)]
 pub struct NeocmakeConfig {
     pub format: FeatureConfig,
@@ -30,11 +30,11 @@ impl Default for NeocmakeConfig {
     }
 }
 
-/// 读取 Zed settings.json 覆盖配置。
+/// Reads Zed settings.json override configuration.
 pub fn load_config(worktree: &zed::Worktree) -> NeocmakeConfig {
     let settings = match worktree.read_text_file(".zed/settings.json") {
         Ok(settings) => {
-            log_message("读取 .zed/settings.json 以获取 LSP 配置覆盖");
+            log_message("reading .zed/settings.json for LSP config overrides");
             Some(settings)
         }
         Err(_) => None,
@@ -52,7 +52,7 @@ fn config_from_settings_json(settings: Option<&str>) -> NeocmakeConfig {
     };
 
     let Ok(value) = serde_json::from_str::<Value>(settings) else {
-        log_message("解析 .zed/settings.json 失败，使用 neocmakelsp 默认初始化配置");
+        log_message("failed to parse .zed/settings.json, using neocmakelsp default init config");
         log_final_config(&config);
         return config;
     };
@@ -70,24 +70,24 @@ fn config_from_settings_json(settings: Option<&str>) -> NeocmakeConfig {
     if let Some(Value::Object(format_obj)) = neocmake_obj.get("format") {
         if let Some(Value::Bool(enable)) = format_obj.get("enable") {
             config.format.enable = *enable;
-            log_message(&format!("settings.json 覆盖: format.enable = {enable}"));
+            log_message(&format!("settings.json override: format.enable = {enable}"));
         }
     }
     if let Some(Value::Object(lint_obj)) = neocmake_obj.get("lint") {
         if let Some(Value::Bool(enable)) = lint_obj.get("enable") {
             config.lint.enable = *enable;
-            log_message(&format!("settings.json 覆盖: lint.enable = {enable}"));
+            log_message(&format!("settings.json override: lint.enable = {enable}"));
         }
     }
     if let Some(Value::Bool(scan)) = neocmake_obj.get("scan_cmake_in_package") {
         config.scan_cmake_in_package = *scan;
         log_message(&format!(
-            "settings.json 覆盖: scan_cmake_in_package = {scan}"
+            "settings.json override: scan_cmake_in_package = {scan}"
         ));
     }
     if let Some(Value::Bool(token)) = neocmake_obj.get("semantic_token") {
         config.semantic_token = *token;
-        log_message(&format!("settings.json 覆盖: semantic_token = {token}"));
+        log_message(&format!("settings.json override: semantic_token = {token}"));
     }
 
     log_final_config(&config);
@@ -96,7 +96,7 @@ fn config_from_settings_json(settings: Option<&str>) -> NeocmakeConfig {
 
 fn log_final_config(config: &NeocmakeConfig) {
     log_message(&format!(
-        "最终 neocmake 配置: format.enable={}, lint.enable={}, scan_cmake_in_package={}, semantic_token={}",
+        "final neocmake config: format.enable={}, lint.enable={}, scan_cmake_in_package={}, semantic_token={}",
         config.format.enable,
         config.lint.enable,
         config.scan_cmake_in_package,

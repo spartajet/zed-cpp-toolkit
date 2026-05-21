@@ -1,6 +1,6 @@
-//! neocmakelsp 二进制查找和下载。
+//! neocmakelsp binary discovery and download.
 //!
-//! 使用 Zed API 从 GitHub Releases 下载 neocmakelsp。
+//! Uses Zed API to download neocmakelsp from GitHub Releases.
 
 use crate::debug::log_message;
 use crate::error::{ToolkitError, ToolkitResult};
@@ -9,7 +9,7 @@ use zed_extension_api as zed;
 const GITHUB_REPO: &str = "neocmakelsp/neocmakelsp";
 const BINARY_NAME: &str = "neocmakelsp";
 
-/// 获取平台特定的资源名称。
+/// Gets platform-specific asset name.
 fn get_asset_name() -> ToolkitResult<String> {
     let (platform, arch) = zed::current_platform();
     asset_name_for_platform(platform, arch)
@@ -25,7 +25,7 @@ fn asset_name_for_platform(platform: zed::Os, arch: zed::Architecture) -> Toolki
         }
         (zed::Os::Mac, _) => Ok("neocmakelsp-universal-apple-darwin.tar.gz".to_string()),
         _ => Err(ToolkitError::NeocmakeDownloadFailed(format!(
-            "不支持的平台或架构: {:?} {:?}",
+            "Unsupported platform or architecture: {:?} {:?}",
             platform, arch
         ))),
     }
@@ -57,9 +57,9 @@ fn binary_path(version: &str) -> String {
     format!("{}/{}", install_dir(version), binary_filename())
 }
 
-/// 从 GitHub Releases 下载 neocmakelsp 二进制。
+/// Downloads neocmakelsp binary from GitHub Releases.
 fn download_binary(language_server_id: &zed::LanguageServerId) -> ToolkitResult<String> {
-    log_message("从 GitHub releases 下载 neocmakelsp");
+    log_message("downloading neocmakelsp from GitHub releases");
 
     let release = zed::latest_github_release(
         GITHUB_REPO,
@@ -69,12 +69,12 @@ fn download_binary(language_server_id: &zed::LanguageServerId) -> ToolkitResult<
         },
     )
     .map_err(|e| {
-        log_message(&format!("获取 GitHub release 失败: {e}"));
-        ToolkitError::NeocmakeDownloadFailed(format!("获取 GitHub release: {e}"))
+        log_message(&format!("failed to get GitHub release: {e}"));
+        ToolkitError::NeocmakeDownloadFailed(format!("get GitHub release: {e}"))
     })?;
 
     let asset_name = get_asset_name()?;
-    log_message(&format!("查找资源: {asset_name}"));
+    log_message(&format!("looking for asset: {asset_name}"));
 
     let asset = release
         .assets
@@ -82,7 +82,7 @@ fn download_binary(language_server_id: &zed::LanguageServerId) -> ToolkitResult<
         .find(|a| a.name == asset_name)
         .ok_or_else(|| {
             ToolkitError::NeocmakeDownloadFailed(format!(
-                "未找到匹配的资源: {}。可用资源: {:?}",
+                "no matching asset found: {}. Available assets: {:?}",
                 asset_name,
                 release.assets.iter().map(|a| &a.name).collect::<Vec<_>>()
             ))
@@ -92,12 +92,12 @@ fn download_binary(language_server_id: &zed::LanguageServerId) -> ToolkitResult<
     let binary_path = binary_path(&release.version);
 
     if std::fs::metadata(&binary_path).is_ok() {
-        log_message(&format!("已存在 neocmakelsp 下载版本: {binary_path}"));
+        log_message(&format!("neocmakelsp download already exists: {binary_path}"));
         return Ok(binary_path);
     }
 
-    log_message(&format!("下载 URL: {}", asset.download_url));
-    log_message(&format!("目标目录: {install_dir}"));
+    log_message(&format!("download URL: {}", asset.download_url));
+    log_message(&format!("target directory: {install_dir}"));
 
     zed::set_language_server_installation_status(
         language_server_id,
@@ -110,28 +110,28 @@ fn download_binary(language_server_id: &zed::LanguageServerId) -> ToolkitResult<
         downloaded_file_type(&asset.name),
     )
     .map_err(|e| {
-        log_message(&format!("下载文件失败: {e}"));
-        ToolkitError::NeocmakeDownloadFailed(format!("下载文件: {e}"))
+        log_message(&format!("failed to download file: {e}"));
+        ToolkitError::NeocmakeDownloadFailed(format!("download file: {e}"))
     })?;
 
     #[cfg(not(target_os = "windows"))]
     zed::make_file_executable(&binary_path)
-        .map_err(|e| ToolkitError::NeocmakeDownloadFailed(format!("设置可执行权限: {e}")))?;
+        .map_err(|e| ToolkitError::NeocmakeDownloadFailed(format!("set executable permission: {e}")))?;
 
-    log_message(&format!("neocmakelsp 已下载到: {binary_path}"));
+    log_message(&format!("neocmakelsp downloaded to: {binary_path}"));
     Ok(binary_path)
 }
 
-/// 清理旧版本的 LSP 二进制。
+/// Cleans up old versions of LSP binaries.
 fn cleanup_old_binaries(current_version: &str) {
     log_message(&format!(
-        "清理旧版本的 neocmakelsp (保留 {current_version})"
+        "cleaning up old versions of neocmakelsp (keeping {current_version})"
     ));
 
     let entries = match std::fs::read_dir(".") {
         Ok(entries) => entries,
         Err(e) => {
-            log_message(&format!("无法列出目录: {e}"));
+            log_message(&format!("failed to list directory: {e}"));
             return;
         }
     };
@@ -140,27 +140,27 @@ fn cleanup_old_binaries(current_version: &str) {
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
 
-        // 删除旧版本
+        // Delete old versions
         if name_str.starts_with("neocmakelsp-") && name_str != current_version {
-            log_message(&format!("删除旧版本: {name_str}"));
+            log_message(&format!("deleting old version: {name_str}"));
             let _ = std::fs::remove_file(entry.path());
             let _ = std::fs::remove_dir_all(entry.path());
         }
     }
 }
 
-/// 在 PATH 中查找或下载 neocmakelsp。
+/// Finds neocmakelsp in PATH or downloads it.
 pub fn get_or_download_binary(
     worktree: &zed::Worktree,
     language_server_id: &zed::LanguageServerId,
 ) -> ToolkitResult<String> {
-    // 首先尝试 PATH
+    // First try PATH
     if let Some(path) = worktree.which(BINARY_NAME) {
-        log_message(&format!("在 PATH 中找到 neocmakelsp: {path}"));
+        log_message(&format!("found neocmakelsp in PATH: {path}"));
         return Ok(path);
     }
 
-    log_message("PATH 中未找到 neocmakelsp，尝试下载");
+    log_message("neocmakelsp not found in PATH, attempting download");
     let binary_path = download_binary(language_server_id)?;
 
     if let Some(current_dir) = binary_path.split('/').next() {

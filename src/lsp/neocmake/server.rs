@@ -1,4 +1,4 @@
-//! neocmakelsp server 命令构建器。
+//! neocmakelsp server command builder.
 
 use crate::debug::log_message;
 use crate::error::{ToolkitError, ToolkitResult};
@@ -7,7 +7,7 @@ use zed_extension_api as zed;
 
 pub const LANGUAGE_SERVER_ID: &str = "msvc-cmake-neocmake";
 
-/// 验证 neocmake language server ID。
+/// Validates neocmake language server ID.
 pub fn validate_language_server_id(id: &str) -> ToolkitResult<()> {
     if id == LANGUAGE_SERVER_ID {
         Ok(())
@@ -16,15 +16,15 @@ pub fn validate_language_server_id(id: &str) -> ToolkitResult<()> {
     }
 }
 
-/// 构建 neocmakelsp 命令。
+/// Builds neocmakelsp command.
 pub fn command_from_worktree(
     worktree: &zed::Worktree,
     language_server_id: &zed::LanguageServerId,
 ) -> ToolkitResult<zed::Command> {
-    log_message("构建 neocmakelsp 命令");
+    log_message("building neocmakelsp command");
 
     let binary_path = get_or_download_binary(worktree, language_server_id)?;
-    log_message(&format!("neocmakelsp 二进制: {binary_path}"));
+    log_message(&format!("neocmakelsp binary: {binary_path}"));
 
     Ok(build_neocmakelsp_command(binary_path))
 }
