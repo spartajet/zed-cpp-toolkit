@@ -8,7 +8,7 @@
 
 本文档描述将 neocmakelsp（CMake LSP）集成到 zed-msvc-toolkit 扩展中的设计和实现方案。
 
-**2026-05-21 更新**: 第一阶段采用 PATH-only 集成。扩展只查找用户已安装并加入 PATH 的 `neocmakelsp`，不自动下载。自动下载作为后续阶段单独实现。
+**2026-05-21 更新**: 第一阶段先采用 PATH-only 集成；随后补充 GitHub Releases 下载回退。当前设计为 PATH 优先，找不到 `neocmakelsp` 时自动下载匹配平台的 release asset。
 
 ### 1.1 目标
 
@@ -19,7 +19,7 @@
 ### 1.2 范围
 
 - 新增 `msvc-cmake-neocmake` LSP ID
-- 实现 neocmakelsp 的 PATH 查找逻辑
+- 实现 neocmakelsp 的 PATH 查找和 GitHub Releases 下载回退
 - 通过 Zed `language_server_initialization_options` 传递初始化选项
 - 读取 `.zed/settings.json` 中的 Zed LSP 初始化选项覆盖
 - 修改现有架构以支持多 LSP
@@ -29,7 +29,6 @@
 - 修改现有的 clangd LSP 行为
 - 替换 CMake 语法高亮（假设已有 tree-sitter 支持）
 - 实现额外的 CMake 工具集成（如任务模板）
-- 第一阶段不自动下载 neocmakelsp
 - 第一阶段不由扩展解析 `.neocmake.toml`；该文件由 neocmakelsp 自己读取
 
 ## 2. 架构设计
@@ -45,7 +44,7 @@ src/lsp/
 └── neocmake/           # 新增 neocmake 子模块
     ├── mod.rs          # 模块入口
     ├── server.rs       # neocmakelsp 命令构建
-    ├── download.rs     # 后续阶段的 GitHub Releases 下载预留
+    ├── download.rs     # GitHub Releases 下载回退
     ├── config.rs       # Zed settings.json 初始化选项覆盖
     └── init_options.rs # LSP 初始化选项
 ```
@@ -85,13 +84,13 @@ pub fn command_from_worktree(worktree: &zed::Worktree) -> zed::Result<zed::Comma
 
 **流程**:
 1. 查找 neocmakelsp 二进制
-2. 如果未找到，返回安装提示错误
+2. 如果未找到，从 GitHub Releases 下载匹配平台的二进制
 3. 构建命令：`neocmakelsp stdio`
 4. 返回 `zed::Command`
 
 ### 3.2 download.rs - 下载逻辑
 
-**职责**: 后续阶段从 GitHub Releases 下载 neocmakelsp。第一阶段不调用该模块。
+**职责**: 从 GitHub Releases 下载 neocmakelsp。
 
 **常量**:
 ```rust
@@ -197,7 +196,7 @@ pub enum NeocmakeError {
 
 ## 5. 实现计划
 
-### Phase 1: PATH-only 基础结构
+### Phase 1: PATH 优先基础结构
 - 创建 `src/lsp/neocmake/` 模块结构
 - 实现基本的命令构建逻辑（仅 PATH 查找）
 - 添加 LSP ID 验证和路由
@@ -234,14 +233,16 @@ pub enum NeocmakeError {
 
 **端到端流程**:
 - PATH 查找成功
-- PATH 未找到给出安装提示
+- PATH 未找到触发 GitHub Releases 下载
 - 配置通过 LSP init options 传递
 
 ## 7. 依赖和限制
 
 ### 7.1 外部依赖
 
-- neocmakelsp 二进制（用户通过 `cargo install neocmakelsp` 或其他方式安装）
+- neocmakelsp 二进制（PATH 中已有，或通过 GitHub Releases 自动下载）
+- GitHub Releases API
+- 网络连接（用于下载回退）
 
 ### 7.2 平台支持
 

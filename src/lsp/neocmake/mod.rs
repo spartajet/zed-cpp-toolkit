@@ -4,6 +4,7 @@
 //!（PATH + GitHub 下载）和双重配置（.neocmake.toml + settings.json）。
 
 pub mod config;
+pub mod download;
 pub mod init_options;
 pub mod server;
 

@@ -4,25 +4,25 @@
 
 **目标**: 将 neocmakelsp 作为 CMake Language Server 集成到现有的 clangd LSP 旁边
 
-**架构**: 新增 `src/lsp/neocmake/` 模块。2026-05-21 修订后，第一阶段采用 PATH-only 集成：只查找 PATH 中的 `neocmakelsp`，通过 Zed `language_server_initialization_options` 传递 init options，不自动下载，不由扩展解析 `.neocmake.toml`。
+**架构**: 新增 `src/lsp/neocmake/` 模块。2026-05-21 修订后，集成采用 PATH 优先策略：先查找 PATH 中的 `neocmakelsp`，找不到时从 `neocmakelsp/neocmakelsp` GitHub Releases 下载匹配平台的资产；通过 Zed `language_server_initialization_options` 传递 init options，不由扩展解析 `.neocmake.toml`。
 
-**技术栈**: Rust, zed_extension_api v0.6.0, serde_json
+**技术栈**: Rust, zed_extension_api v0.6.0, serde_json, GitHub Releases API
 
 ---
 
-## 2026-05-21 PATH-only 修订
+## 2026-05-21 下载功能修订
 
-原计划中的下载回退和 `.neocmake.toml` 合并被推迟到后续阶段。当前已执行的第一阶段范围如下：
+原计划中的 `.neocmake.toml` 合并被推迟到后续阶段。当前范围如下：
 
-- `server.rs` 只通过 `worktree.which("neocmakelsp")` 查找二进制。
-- 找不到 `neocmakelsp` 时返回安装提示，不触发下载。
+- `server.rs` 通过 `worktree.which("neocmakelsp")` 优先查找二进制。
+- 找不到 `neocmakelsp` 时调用 `download.rs` 从 GitHub Releases 下载。
 - 启动命令为 `neocmakelsp stdio`，不再传递 `--init-options=...`。
 - `src/lib.rs` 实现 `language_server_initialization_options`，通过 Zed API 传递 neocmakelsp init options。
 - `config.rs` 只读取 `.zed/settings.json` 中的 `lsp.msvc-cmake-neocmake` 覆盖。
 - `.neocmake.toml` 由 neocmakelsp 自己读取，扩展不解析。
-- `download.rs` 暂不导出，后续阶段重做 GitHub Releases 下载。
+- `download.rs` 匹配当前 release 资产名：Windows zip、Linux tar.gz、macOS universal tar.gz。
 
-后续执行时，以本修订为准，不再执行任务 3、任务 4 中关于自动下载和 `.neocmake.toml` 解析的旧步骤。
+后续执行时，以本修订为准，不再执行任务 4 中关于 `.neocmake.toml` 解析的旧步骤。
 
 ## 文件结构
 

@@ -6,31 +6,55 @@ use crate::debug::log_message;
 use crate::error::{ToolkitError, ToolkitResult};
 use zed_extension_api as zed;
 
-const GITHUB_REPO: &str = "Decodetalkers/neocmakelsp";
+const GITHUB_REPO: &str = "neocmakelsp/neocmakelsp";
 const BINARY_NAME: &str = "neocmakelsp";
 
 /// 获取平台特定的资源名称。
 fn get_asset_name() -> ToolkitResult<String> {
     let (platform, arch) = zed::current_platform();
+    asset_name_for_platform(platform, arch)
+}
 
-    let arch_str = match arch {
-        zed::Architecture::X8664 => "x86_64",
-        zed::Architecture::Aarch64 => "aarch64",
-        _ => {
-            return Err(ToolkitError::NeocmakeDownloadFailed(format!(
-                "不支持的架构: {:?}",
-                arch
-            )));
+fn asset_name_for_platform(platform: zed::Os, arch: zed::Architecture) -> ToolkitResult<String> {
+    match (platform, arch) {
+        (zed::Os::Windows, zed::Architecture::X8664) => {
+            Ok("neocmakelsp-x86_64-pc-windows-msvc.zip".to_string())
         }
-    };
+        (zed::Os::Linux, zed::Architecture::X8664) => {
+            Ok("neocmakelsp-x86_64-unknown-linux-gnu.tar.gz".to_string())
+        }
+        (zed::Os::Mac, _) => Ok("neocmakelsp-universal-apple-darwin.tar.gz".to_string()),
+        _ => Err(ToolkitError::NeocmakeDownloadFailed(format!(
+            "不支持的平台或架构: {:?} {:?}",
+            platform, arch
+        ))),
+    }
+}
 
-    let os_str = match platform {
-        zed::Os::Windows => "pc-windows-msvc.exe",
-        zed::Os::Linux => "unknown-linux-gnu",
-        zed::Os::Mac => "apple-darwin",
-    };
+fn downloaded_file_type(asset_name: &str) -> zed::DownloadedFileType {
+    if asset_name.ends_with(".zip") {
+        zed::DownloadedFileType::Zip
+    } else if asset_name.ends_with(".tar.gz") {
+        zed::DownloadedFileType::GzipTar
+    } else {
+        zed::DownloadedFileType::Uncompressed
+    }
+}
 
-    Ok(format!("{}-{}-{}", BINARY_NAME, arch_str, os_str))
+fn binary_filename() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "neocmakelsp.exe"
+    } else {
+        BINARY_NAME
+    }
+}
+
+fn install_dir(version: &str) -> String {
+    format!("{BINARY_NAME}-{version}")
+}
+
+fn binary_path(version: &str) -> String {
+    format!("{}/{}", install_dir(version), binary_filename())
 }
 
 /// 从 GitHub Releases 下载 neocmakelsp 二进制。
@@ -64,10 +88,16 @@ fn download_binary(language_server_id: &zed::LanguageServerId) -> ToolkitResult<
             ))
         })?;
 
-    let binary_path = format!("{}-{}", BINARY_NAME, release.version);
+    let install_dir = install_dir(&release.version);
+    let binary_path = binary_path(&release.version);
+
+    if std::fs::metadata(&binary_path).is_ok() {
+        log_message(&format!("已存在 neocmakelsp 下载版本: {binary_path}"));
+        return Ok(binary_path);
+    }
 
     log_message(&format!("下载 URL: {}", asset.download_url));
-    log_message(&format!("目标路径: {binary_path}"));
+    log_message(&format!("目标目录: {install_dir}"));
 
     zed::set_language_server_installation_status(
         language_server_id,
@@ -76,15 +106,15 @@ fn download_binary(language_server_id: &zed::LanguageServerId) -> ToolkitResult<
 
     zed::download_file(
         &asset.download_url,
-        &binary_path,
-        zed::DownloadedFileType::Uncompressed,
+        &install_dir,
+        downloaded_file_type(&asset.name),
     )
     .map_err(|e| {
         log_message(&format!("下载文件失败: {e}"));
         ToolkitError::NeocmakeDownloadFailed(format!("下载文件: {e}"))
     })?;
 
-    #[cfg(unix)]
+    #[cfg(not(target_os = "windows"))]
     zed::make_file_executable(&binary_path)
         .map_err(|e| ToolkitError::NeocmakeDownloadFailed(format!("设置可执行权限: {e}")))?;
 
@@ -133,6 +163,40 @@ pub fn get_or_download_binary(
     log_message("PATH 中未找到 neocmakelsp，尝试下载");
     let binary_path = download_binary(language_server_id)?;
 
-    cleanup_old_binaries(&binary_path);
+    if let Some(current_dir) = binary_path.split('/').next() {
+        cleanup_old_binaries(current_dir);
+    }
     Ok(binary_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn selects_windows_release_asset() {
+        let asset = asset_name_for_platform(zed::Os::Windows, zed::Architecture::X8664).unwrap();
+
+        assert_eq!(asset, "neocmakelsp-x86_64-pc-windows-msvc.zip");
+    }
+
+    #[test]
+    fn selects_linux_release_asset() {
+        let asset = asset_name_for_platform(zed::Os::Linux, zed::Architecture::X8664).unwrap();
+
+        assert_eq!(asset, "neocmakelsp-x86_64-unknown-linux-gnu.tar.gz");
+    }
+
+    #[test]
+    fn selects_universal_macos_release_asset() {
+        let asset = asset_name_for_platform(zed::Os::Mac, zed::Architecture::Aarch64).unwrap();
+
+        assert_eq!(asset, "neocmakelsp-universal-apple-darwin.tar.gz");
+    }
+
+    #[test]
+    fn builds_versioned_install_paths() {
+        assert_eq!(install_dir("v0.10.2"), "neocmakelsp-v0.10.2");
+        assert!(binary_path("v0.10.2").starts_with("neocmakelsp-v0.10.2/"));
+    }
 }

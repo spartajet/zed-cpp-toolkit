@@ -2,10 +2,10 @@
 
 use crate::debug::log_message;
 use crate::error::{ToolkitError, ToolkitResult};
+use crate::lsp::neocmake::download::get_or_download_binary;
 use zed_extension_api as zed;
 
 pub const LANGUAGE_SERVER_ID: &str = "msvc-cmake-neocmake";
-const BINARY_NAME: &str = "neocmakelsp";
 
 /// 验证 neocmake language server ID。
 pub fn validate_language_server_id(id: &str) -> ToolkitResult<()> {
@@ -17,19 +17,16 @@ pub fn validate_language_server_id(id: &str) -> ToolkitResult<()> {
 }
 
 /// 构建 neocmakelsp 命令。
-pub fn command_from_worktree(worktree: &zed::Worktree) -> ToolkitResult<zed::Command> {
+pub fn command_from_worktree(
+    worktree: &zed::Worktree,
+    language_server_id: &zed::LanguageServerId,
+) -> ToolkitResult<zed::Command> {
     log_message("构建 neocmakelsp 命令");
 
-    let binary_path = require_neocmakelsp(worktree)?;
+    let binary_path = get_or_download_binary(worktree, language_server_id)?;
     log_message(&format!("neocmakelsp 二进制: {binary_path}"));
 
     Ok(build_neocmakelsp_command(binary_path))
-}
-
-fn require_neocmakelsp(worktree: &zed::Worktree) -> ToolkitResult<String> {
-    worktree
-        .which(BINARY_NAME)
-        .ok_or(ToolkitError::MissingNeocmakelsp)
 }
 
 fn build_neocmakelsp_command(binary_path: String) -> zed::Command {

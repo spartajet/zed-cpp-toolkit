@@ -47,11 +47,13 @@ Then run tasks via `Ctrl+Shift+T` (Task: Run).
 The extension includes [neocmakelsp](https://github.com/neocmakelsp/neocmakelsp) for CMake language support (`CMakeLists.txt` files).
 
 **Installation:**
-- Install `neocmakelsp` yourself and make sure it is available in `PATH`:
+- If `neocmakelsp` is available in `PATH`, the extension uses it directly.
+- Otherwise, the extension downloads the latest matching release asset from GitHub:
+  `neocmakelsp/neocmakelsp`.
+- You can still install it yourself if you prefer:
   ```bash
   cargo install neocmakelsp
   ```
-- Automatic download is planned for a later phase and is not enabled in the current integration.
 
 **Configuration:**
 

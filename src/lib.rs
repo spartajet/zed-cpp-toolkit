@@ -65,7 +65,8 @@ impl zed::Extension for MsvcToolkitExtension {
                 {
                     return Err(error_msg);
                 }
-                lsp::neocmake::server::command_from_worktree(worktree).map_err(|e| e.user_message())
+                lsp::neocmake::server::command_from_worktree(worktree, language_server_id_value)
+                    .map_err(|e| e.user_message())
             }
             _ => {
                 let error = format!("不支持的 language server: {language_server_id}");

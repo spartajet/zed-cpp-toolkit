@@ -55,7 +55,7 @@ impl ToolkitError {
                 "找不到 cmake。请安装 CMake 并将其加入 PATH。".to_string()
             }
             Self::MissingNeocmakelsp => {
-                "找不到 neocmakelsp。请先安装 neocmakelsp，并将 neocmakelsp 加入 PATH。".to_string()
+                "找不到 neocmakelsp，将尝试从 GitHub Releases 下载。".to_string()
             }
             Self::NeocmakeDownloadFailed(url) => {
                 format!("下载 neocmakelsp 失败：{url}")
