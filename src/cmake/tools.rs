@@ -1,37 +1,37 @@
-//! CMake 工具探测与命令构建。
+//! CMake tool discovery and command building.
 //!
-//! V0.3 实现 cmake/ninja 探测和命令生成。
+//! V0.3 implements cmake/ninja detection and command generation.
 
 use crate::environment::tools::CommandRunner;
 use crate::error::{ToolkitError, ToolkitResult};
 
-/// CMake 可执行文件名。
+/// CMake executable name.
 pub const CMAKE_EXE: &str = "cmake";
 
-/// Ninja 可执行文件名。
+/// Ninja executable name.
 pub const NINJA_EXE: &str = "ninja";
 
-/// CMake 配置选项。
+/// CMake configuration options.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CmakeConfigureOptions {
-    /// 源目录（工作区根目录）
+    /// Source directory (workspace root)
     pub source_dir: String,
-    /// 构建目录
+    /// Build directory
     pub build_dir: String,
-    /// 生成器
+    /// Generator
     pub generator: CmakeGenerator,
-    /// 构建类型
+    /// Build type
     pub build_type: CmakeBuildType,
 }
 
-/// CMake 生成器类型。
+/// CMake generator type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CmakeGenerator {
     Ninja,
     VisualStudio2022,
 }
 
-/// CMake 构建类型。
+/// CMake build type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum CmakeBuildType {
@@ -41,7 +41,7 @@ pub enum CmakeBuildType {
 }
 
 impl CmakeGenerator {
-    /// 返回生成器的名称（不包括 -G 前缀）。
+    /// Returns the generator name (without -G prefix).
     #[allow(dead_code)]
     pub fn generator_name(&self) -> &str {
         match self {
@@ -50,10 +50,10 @@ impl CmakeGenerator {
         }
     }
 
-    /// 返回生成器的完整命令行参数列表。
+    /// Returns the full command-line argument list for the generator.
     ///
-    /// 返回一个 Vec，每个元素是一个独立的命令行参数。
-    /// 例如：vec!["-G", "Ninja"]
+    /// Returns a Vec where each element is a separate command-line argument.
+    /// Example: vec!["-G", "Ninja"]
     pub fn as_args(&self) -> Vec<String> {
         match self {
             Self::Ninja => vec!["-G".to_string(), "Ninja".to_string()],
@@ -63,7 +63,7 @@ impl CmakeGenerator {
 }
 
 impl CmakeBuildType {
-    /// 返回构建类型的 CMake 变量值。
+    /// Returns the CMake variable value for the build type.
     pub fn as_cmake_var(&self) -> &str {
         match self {
             Self::Debug => "Debug",
@@ -72,7 +72,7 @@ impl CmakeBuildType {
         }
     }
 
-    /// 返回 --build 使用的配置参数。
+    /// Returns the config argument for --build.
     pub fn as_build_arg(&self) -> &str {
         match self {
             Self::Debug => "Debug",
@@ -82,19 +82,19 @@ impl CmakeBuildType {
     }
 }
 
-/// 探测系统中的 CMake。
+/// Discovers CMake in the system.
 ///
-/// 通过执行 `cmake --version` 验证 CMake 是否可用。
+/// Verifies CMake availability by executing `cmake --version`.
 ///
-/// # 返回值
+/// # Returns
 ///
-/// 返回 `Ok("cmake")` 表示工具在系统 PATH 中可用。
-/// 返回 `Err(ToolkitError::MissingCmake)` 表示工具不存在或无法执行。
+/// Returns `Ok("cmake")` if the tool is available in system PATH.
+/// Returns `Err(ToolkitError::MissingCmake)` if the tool doesn't exist or cannot be executed.
 ///
-/// # 注意
+/// # Note
 ///
-/// 此函数返回可执行文件名称而非完整路径。
-/// 调用者应确保此名称在 PATH 环境变量中可用。
+/// This function returns the executable name, not the full path.
+/// Callers should ensure this name is available in the PATH environment variable.
 pub fn discover_cmake(runner: &impl CommandRunner) -> ToolkitResult<String> {
     runner
         .run_command(CMAKE_EXE, &["--version".to_string()])
@@ -102,18 +102,18 @@ pub fn discover_cmake(runner: &impl CommandRunner) -> ToolkitResult<String> {
         .map_err(|_| ToolkitError::MissingCmake)
 }
 
-/// 探测系统中的 Ninja。
+/// Discovers Ninja in the system.
 ///
-/// 通过执行 `ninja --version` 验证 Ninja 是否可用。
+/// Verifies Ninja availability by executing `ninja --version`.
 ///
-/// # 返回值
+/// # Returns
 ///
-/// 返回 `Some("ninja")` 表示工具在系统 PATH 中可用。
-/// 返回 `None` 表示工具不存在或无法执行。
+/// Returns `Some("ninja")` if the tool is available in system PATH.
+/// Returns `None` if the tool doesn't exist or cannot be executed.
 ///
-/// # 注意
+/// # Note
 ///
-/// 此函数返回可执行文件名称而非完整路径。
+/// This function returns the executable name, not the full path.
 pub fn discover_ninja(runner: &impl CommandRunner) -> Option<String> {
     runner
         .run_command(NINJA_EXE, &["--version".to_string()])
@@ -121,9 +121,9 @@ pub fn discover_ninja(runner: &impl CommandRunner) -> Option<String> {
         .map(|_| NINJA_EXE.to_string())
 }
 
-/// 根据环境选择合适的生成器。
+/// Selects an appropriate generator based on the environment.
 ///
-/// 优先使用 Ninja，回退到 Visual Studio 2022。
+/// Prefers Ninja, falls back to Visual Studio 2022.
 pub fn select_generator(runner: &impl CommandRunner) -> CmakeGenerator {
     if discover_ninja(runner).is_some() {
         CmakeGenerator::Ninja
@@ -132,9 +132,9 @@ pub fn select_generator(runner: &impl CommandRunner) -> CmakeGenerator {
     }
 }
 
-/// 构建 CMake configure 命令参数列表。
+/// Builds CMake configure command argument list.
 ///
-/// 返回的参数列表可以直接传递给 CMake 可执行文件。
+/// The returned argument list can be passed directly to the CMake executable.
 pub fn build_configure_command(options: &CmakeConfigureOptions) -> Vec<String> {
     let mut args = vec![
         "-S".to_string(),
@@ -150,9 +150,9 @@ pub fn build_configure_command(options: &CmakeConfigureOptions) -> Vec<String> {
     args
 }
 
-/// 构建 CMake build 命令参数列表。
+/// Builds CMake build command argument list.
 ///
-/// 返回的参数列表可以直接传递给 CMake 可执行文件。
+/// The returned argument list can be passed directly to the CMake executable.
 pub fn build_build_command(build_dir: &str, build_type: CmakeBuildType) -> Vec<String> {
     vec![
         "--build".to_string(),

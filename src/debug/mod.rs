@@ -1,11 +1,11 @@
-//! Debug adapter 集成模块边界。
+//! Debug adapter integration module boundary.
 //!
-//! V0.1 不注册或启动 vsdbg。
+//! V0.1 does not register or start vsdbg.
 
-/// 追加一行诊断日志到 stderr。
+/// Appends a diagnostic log line to stderr.
 ///
-/// 日志会显示在 Zed 的 LSP logs 窗体中（dev: open language server logs）。
-/// 使用 eprintln! 直接输出到 stderr，避免启动额外的 PowerShell 子进程。
+/// Logs appear in Zed's LSP logs window (dev: open language server logs).
+/// Uses eprintln! to write directly to stderr, avoiding spawning additional PowerShell subprocess.
 pub fn log_message(message: &str) {
     #[cfg(target_arch = "wasm32")]
     {

@@ -1,31 +1,31 @@
-//! CMake 编译数据库探测。
+//! CMake compile database discovery.
 //!
-//! V0.2 实现 compile_commands.json 探测。
+//! V0.2 implements compile_commands.json discovery.
 
 use std::path::Path;
 
 pub const COMPILE_COMMANDS_JSON: &str = "compile_commands.json";
 
-/// 探测编译数据库路径。
+/// Discovers compile database path.
 ///
-/// 搜索顺序：
-/// 1. 工作区根目录
-/// 2. build/ 子目录（传统方式）
-/// 3. cmake-build-debug/ 子目录（CLion Debug）
-/// 4. cmake-build-release/ 子目录（CLion Release）
-/// 5. cmake-build-relwithdebinfo/ 子目录（CLion RelWithDebInfo）
+/// Search order:
+/// 1. Workspace root directory
+/// 2. build/ subdirectory (traditional)
+/// 3. cmake-build-debug/ subdirectory (CLion Debug)
+/// 4. cmake-build-release/ subdirectory (CLion Release)
+/// 5. cmake-build-relwithdebinfo/ subdirectory (CLion RelWithDebInfo)
 ///
-/// # 返回值
+/// # Returns
 ///
-/// 返回包含 `compile_commands.json` 的**目录路径**（不含文件名），
-/// 或 None（如果文件不存在或路径包含非UTF-8字符）。
+/// Returns the **directory path** containing `compile_commands.json` (without filename),
+/// or None if the file doesn't exist or the path contains non-UTF-8 characters.
 pub fn discover_compile_database(root_path: &str) -> Option<String> {
     let root = Path::new(root_path);
 
-    // 检查的目录列表，按优先级排序
+    // List of directories to check, in priority order
     let build_dirs = [
-        "",                              // 根目录
-        "build",                         // 传统方式
+        "",                              // Root directory
+        "build",                         // Traditional
         "cmake-build-debug",             // CLion Debug
         "cmake-build-release",           // CLion Release
         "cmake-build-relwithdebinfo",    // CLion RelWithDebInfo
@@ -47,7 +47,7 @@ pub fn discover_compile_database(root_path: &str) -> Option<String> {
     None
 }
 
-/// 探测 CMakeLists.txt 是否存在。
+/// Checks if CMakeLists.txt exists.
 pub fn has_cmake_lists(root_path: &str) -> bool {
     Path::new(root_path).join("CMakeLists.txt").exists()
 }
@@ -60,21 +60,21 @@ mod tests {
 
     static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-    /// 创建一个临时测试目录，并在测试完成后清理。
+    /// Creates a temporary test directory and cleans up after the test.
     fn with_temp_dir<F>(f: F)
     where
         F: FnOnce(&std::path::Path),
     {
-        // 使用系统临时目录创建唯一的子目录
+        // Create a unique subdirectory in the system temp directory
         let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
         let temp_dir =
             std::env::temp_dir().join(format!("zed-msvc-test-{}-{}", std::process::id(), test_id));
         fs::create_dir_all(&temp_dir).unwrap();
 
-        // 执行测试
+        // Run the test
         f(&temp_dir);
 
-        // 清理
+        // Cleanup
         let _ = fs::remove_dir_all(&temp_dir);
     }
 
@@ -156,18 +156,18 @@ mod tests {
 
     #[test]
     fn handles_non_utf8_path_gracefully() {
-        // 测试非UTF-8路径时的降级行为
-        // 使用从字节创建的字符串来模拟非UTF-8路径
+        // Test graceful degradation for non-UTF-8 paths
+        // Create a string from bytes to simulate non-UTF-8 paths
         let invalid_bytes = [0xFF, 0xFE, 0xFD];
         let invalid_path = std::str::from_utf8(&invalid_bytes);
-        // 非UTF-8路径无法创建&str，这是编译时保证
-        // 实际场景中，路径来自API调用，如果转换为str失败则降级
+        // Non-UTF-8 paths cannot be converted to &str, this is a compile-time guarantee
+        // In real scenarios, paths come from API calls; if conversion to str fails, it degrades
         assert!(invalid_path.is_err());
 
-        // 测试实际的降级行为：使用无法转换的场景
-        // Path::new() 接受 &str，如果调用者传入无效UTF-8，
-        // 问题会在调用栈上游暴露。这里验证我们的函数
-        // 不会因为路径内容而panic
+        // Test actual degradation behavior with a non-convertible scenario
+        // Path::new() takes &str; if caller passes invalid UTF-8,
+        // the issue will be exposed upstream in the call stack. This verifies our function
+        // won't panic due to path content
         let test_path = "C:\\valid\\utf8\\path";
         let result = std::panic::catch_unwind(|| discover_compile_database(test_path));
         assert!(result.is_ok());
@@ -231,7 +231,7 @@ mod tests {
             let root_str = root.to_str().expect("temp path should be valid UTF-8");
             let found = discover_compile_database(root_str);
 
-            // 应该优先返回传统的 build/ 目录
+            // Should prefer the traditional build/ directory
             let expected = build_dir.to_str().expect("path should be valid UTF-8");
             assert_eq!(found, Some(expected.to_string()));
         });

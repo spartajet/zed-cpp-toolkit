@@ -34,47 +34,47 @@ impl ToolkitError {
     pub fn user_message(&self) -> String {
         match self {
             Self::UnsupportedLanguageServer(id) => {
-                format!("不支持的 language server: {id}")
+                format!(“Unsupported language server: {id}”)
             }
             Self::MissingVswhere => {
-                "找不到 vswhere.exe。请确认已安装 Visual Studio Installer 和 Visual Studio 2022+。"
+                “vswhere.exe not found. Please ensure Visual Studio Installer and Visual Studio 2022+ are installed.”
                     .to_string()
             }
             Self::MissingVisualStudio => {
-                "找不到 Visual Studio 2022+。请安装 Visual Studio 2022 或更新版本，并包含“使用 C++ 的桌面开发”工作负载。"
+                “Visual Studio 2022+ not found. Please install Visual Studio 2022 or later with the 'Desktop development with C++' workload.”
                     .to_string()
             }
             Self::MissingMsvcToolset => {
-                "找不到 MSVC v143+ toolset。请在 Visual Studio Installer 中安装 MSVC C++ build tools。"
+                “MSVC v143+ toolset not found. Please install MSVC C++ build tools in Visual Studio Installer.”
                     .to_string()
             }
             Self::MissingClangd => {
-                "找不到 clangd。请安装 LLVM，或将 clangd.exe 加入 PATH。".to_string()
+                “clangd not found. Please install LLVM or add clangd.exe to PATH.”.to_string()
             }
             Self::MissingCmake => {
-                "找不到 cmake。请安装 CMake 并将其加入 PATH。".to_string()
+                “cmake not found. Please install CMake and add it to PATH.”.to_string()
             }
             Self::MissingNeocmakelsp => {
-                "找不到 neocmakelsp，将尝试从 GitHub Releases 下载。".to_string()
+                “neocmakelsp not found, will attempt to download from GitHub Releases.”.to_string()
             }
             Self::NeocmakeDownloadFailed(url) => {
-                format!("下载 neocmakelsp 失败：{url}")
+                format!(“Failed to download neocmakelsp: {url}”)
             }
             Self::NeocmakeConfigParseError(detail) => {
-                format!("解析 neocmake 配置失败：{detail}，将使用默认配置。")
+                format!(“Failed to parse neocmake config: {detail}, using default configuration.”)
             }
             Self::MissingTool(tool) => {
-                format!("找不到工具：{tool}。请确认已安装并加入 PATH。")
+                format!(“Tool not found: {tool}. Please ensure it is installed and in PATH.”)
             }
             Self::MissingWorkspaceConfig(contents) => format!(
-                "当前 Zed extension API 不支持从扩展直接写入工作区 .clangd。请在工作区根目录手动创建 .clangd，内容如下：\n\n{contents}"
+                “Current Zed extension API does not support writing workspace .clangd from extension. Please manually create .clangd in workspace root with:\n\n{contents}”
             ),
             Self::ProcessFailed {
                 command,
                 status,
                 stderr,
             } => {
-                format!("执行外部命令失败：{command}，退出码：{status:?}，错误输出：{stderr}")
+                format!(“External command failed: {command}, exit code: {status:?}, stderr: {stderr}”)
             }
             Self::IoMessage(message) => message.clone(),
         }

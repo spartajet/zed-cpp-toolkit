@@ -1,6 +1,6 @@
 use zed_extension_api as zed;
 
-// CMake 集成模块（预留功能，当前仅被 clangd LSP 使用）
+// CMake integration module (reserved feature, currently only used by clangd LSP)
 #[allow(unused_imports)]
 mod cmake;
 mod debug;
@@ -16,7 +16,7 @@ impl zed::Extension for MsvcToolkitExtension {
     fn new() -> Self {
         debug::log_message("extension instance created");
 
-        // 检查 Git 是否可用
+        // Check if Git is available
         match std::process::Command::new("git").arg("--version").output() {
             Ok(output) => {
                 let version = String::from_utf8_lossy(&output.stdout);
@@ -49,7 +49,7 @@ impl zed::Extension for MsvcToolkitExtension {
             zed::LanguageServerInstallationStatus::CheckingForUpdate,
         );
 
-        // 根据 ID 路由到对应的 LSP
+        // Route to the appropriate LSP based on ID
         let result = match language_server_id {
             "msvc-cpp-clangd" => {
                 if let Err(error_msg) =
@@ -69,7 +69,7 @@ impl zed::Extension for MsvcToolkitExtension {
                     .map_err(|e| e.user_message())
             }
             _ => {
-                let error = format!("不支持的 language server: {language_server_id}");
+                let error = format!("Unsupported language server: {language_server_id}");
                 debug::log_message(&error);
                 set_lsp_status(
                     language_server_id_value,
@@ -113,7 +113,7 @@ impl zed::Extension for MsvcToolkitExtension {
             "msvc-cmake-neocmake" => {
                 let config = lsp::neocmake::config::load_config(worktree);
                 let options = lsp::neocmake::init_options::build_init_options(&config);
-                debug::log_message(&format!("neocmakelsp 初始化选项: {options}"));
+                debug::log_message(&format!("neocmakelsp init options: {options}"));
                 Ok(Some(options))
             }
             _ => Ok(None),

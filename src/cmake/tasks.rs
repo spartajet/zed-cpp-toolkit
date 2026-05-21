@@ -1,38 +1,38 @@
-//! Zed 任务文件生成。
+//! Zed tasks file generation.
 //!
-//! V0.4 实现 .zed/tasks.json 生成，绕过 API 限制支持 CMake 命令。
+//! V0.4 implements .zed/tasks.json generation, bypassing API limitations to support CMake commands.
 
 use crate::error::{ToolkitError, ToolkitResult};
 use serde_json::json;
 
-/// CMake 构建目标。
+/// CMake build target.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CmakeTarget {
-    /// CMake/Ninja 目标名。
+    /// CMake/Ninja target name.
     pub name: String,
-    /// 目标输出文件，相对于构建目录。
+    /// Target output file, relative to build directory.
     pub output: Option<String>,
-    /// 是否是可执行文件目标。
+    /// Whether this is an executable target.
     pub executable: bool,
 }
 
-/// 任务配置选项。
+/// Task configuration options.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskOptions {
-    /// 构建目录（相对于工作区根目录）
+    /// Build directory (relative to workspace root)
     pub build_dir: String,
-    /// 构建类型
+    /// Build type
     pub build_type: String,
-    /// Visual Studio 开发者环境脚本路径。
+    /// Visual Studio Developer Command Prompt script path.
     pub vs_dev_cmd: Option<String>,
-    /// CMake 生成后的目标列表。
+    /// List of targets after CMake generation.
     pub targets: Vec<CmakeTarget>,
 }
 
-/// 生成 Zed 任务文件内容。
+/// Generates Zed tasks file content.
 ///
-/// 返回的 JSON 包含 CMake configure、build 和 run 任务，
-/// 使用 Zed 提供的 ZED_WORKTREE_ROOT 环境变量引用工作区根目录。
+/// The returned JSON contains CMake configure, build, and run tasks,
+/// using Zed's ZED_WORKTREE_ROOT environment variable to reference the workspace root.
 pub fn generate_tasks_json(options: &TaskOptions) -> ToolkitResult<String> {
     let mut tasks = vec![
         powershell_task(
@@ -64,7 +64,7 @@ pub fn generate_tasks_json(options: &TaskOptions) -> ToolkitResult<String> {
     serde_json::to_string_pretty(&tasks).map_err(|error| ToolkitError::IoMessage(error.to_string()))
 }
 
-/// 根据 CLion 风格返回构建目录名
+/// Returns build directory name in CLion style.
 fn build_dir_for_type(build_type: &str) -> String {
     let suffix = match build_type {
         "Debug" => "debug",
@@ -76,7 +76,7 @@ fn build_dir_for_type(build_type: &str) -> String {
     format!("cmake-build-{}", suffix)
 }
 
-/// 默认任务配置（Debug 构建）。
+/// Default task configuration (Debug build).
 impl Default for TaskOptions {
     fn default() -> Self {
         let build_type = "Debug";

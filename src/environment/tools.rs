@@ -1,9 +1,9 @@
 use crate::error::{ToolkitError, ToolkitResult};
 use zed_extension_api as zed;
 
-/// 通用工具探测函数。
+/// Generic tool discovery function.
 ///
-/// 检查工具路径是否有效（非空字符串）。
+/// Checks if a tool path is valid (non-empty string).
 #[allow(dead_code)]
 pub fn require_tool(tool_path: Option<String>) -> ToolkitResult<String> {
     tool_path.ok_or_else(|| ToolkitError::MissingTool(String::from("unknown")))
