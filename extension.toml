@@ -3,11 +3,13 @@ name = "Zed MSVC C++ Assistant"
 description = "MSVC and clangd assistant for Windows C++ CMake projects in Zed."
 version = "0.5.0"
 schema_version = 1
-authors = ["XRZB"]
-repository = "https://github.com/XRZB/zed-msvc-toolkit"
+authors = ["Dr.Guo"]
+repository = "https://github.com/spartajet/zed-msvc-toolkit.git"
 
 capabilities = [
-  { kind = "process:exec", command = "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe", args = ["**"] },
+  { kind = "process:exec", command = "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe", args = [
+    "**"
+  ] },
   { kind = "process:exec", command = "powershell", args = ["**"] },
   { kind = "process:exec", command = "cmake", args = ["**"] },
 ]
