@@ -95,7 +95,7 @@ mod tests {
         assert!(rendered.contains("- /IC:/Windows Kits/10/Include/10.0.22621.0/ucrt"));
         assert!(rendered.contains("- /IC:/Windows Kits/10/Include/10.0.22621.0/um"));
         assert!(rendered.contains("- /IC:/Windows Kits/10/Include/10.0.22621.0/shared"));
-        assert!(!rendered.contains("Windows SDK include 未自动探测到"));
+        assert!(!rendered.contains("Windows SDK include not auto-detected"));
     }
 
     #[test]
