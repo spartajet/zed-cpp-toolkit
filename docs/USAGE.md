@@ -1,93 +1,93 @@
-# Zed MSVC C++ Assistant - 使用说明
+# Zed MSVC C++ Assistant - Usage Guide
 
-## 安装
+## Installation
 
-### 1. 编译扩展
+### 1. Build the Extension
 
 ```bash
-# 添加 WASM 目标（必须通过 rustup 安装 Rust）
+# Add WASM target (Rust must be installed via rustup)
 rustup target add wasm32-unknown-unknown
 
-# 编译 Release 版本
+# Build Release version
 cargo build --target wasm32-unknown-unknown --release
 ```
 
-### 2. 作为 Dev Extension 安装
+### 2. Install as Dev Extension
 
-Zed 支持本地开发扩展（Dev Extension），无需发布即可使用：
+Zed supports local development extensions (Dev Extension), no need to publish:
 
-1. 在 Zed 中打开扩展面板：`Ctrl+Shift+X`
-2. 点击 `Install Dev Extension` 按钮
-3. 选择项目根目录 `E:\Rust\zed-msvc-toolkit`
-4. Zed 会自动编译并加载扩展
+1. Open extension panel in Zed: `Ctrl+Shift+X`
+2. Click `Install Dev Extension` button
+3. Select project root directory `E:\Rust\zed-msvc-toolkit`
+4. Zed will automatically compile and load the extension
 
-**注意**：
-- 项目必须是 Git 仓库
-- Rust 必须通过 rustup 安装（不能通过其他方式如 homebrew）
-- 如需调试日志，使用 `zed --foreground` 启动 Zed
+**Note**:
+- Project must be a Git repository
+- Rust must be installed via rustup (not via other methods like homebrew)
+- For debug logs, start Zed with `zed --foreground`
 
-### 3. 发布到扩展市场
+### 3. Publish to Extension Marketplace
 
-发布扩展需要 PR 到 `zed-industries/extensions` 仓库：
+Publishing extension requires PR to `zed-industries/extensions` repository:
 
-1. 将项目推送到公开的 GitHub 仓库
-2. Fork `zed-industries/extensions` 仓库
-3. 作为 Git submodule 添加你的扩展
-4. 更新 `extensions.toml`
-5. 提交 PR
+1. Push project to a public GitHub repository
+2. Fork `zed-industries/extensions` repository
+3. Add your extension as a Git submodule
+4. Update `extensions.toml`
+5. Submit PR
 
-## 系统要求
+## System Requirements
 
-- **操作系统**: Windows 11
-- **Visual Studio**: 2022 或更新版本
-  - 需要安装 "使用 C++ 的桌面开发" 工作负载
-- **LLVM**: 需要安装 clangd 并加入 PATH
-- **CMake** (可选): 如需使用任务系统
+- **Operating System**: Windows 11
+- **Visual Studio**: 2022 or newer
+  - "Desktop development with C++" workload must be installed
+- **LLVM**: clangd must be installed and in PATH
+- **CMake** (optional): Required for using task system
 
-## 功能
+## Features
 
-### V0.1: MSVC 环境探测
+### V0.1: MSVC Environment Detection
 
-扩展自动探测以下内容：
-- Visual Studio 2022+ 安装路径（通过 vswhere.exe）
-- MSVC v143+ 工具链
-- Windows SDK 包含目录
-- clangd 可执行文件
+Extension automatically detects:
+- Visual Studio 2022+ installation path (via vswhere.exe)
+- MSVC v143+ toolchain
+- Windows SDK include directories
+- clangd executable
 
-### V0.2: 编译数据库支持
+### V0.2: Compile Database Support
 
-自动探测以下位置的 `compile_commands.json`：
-- 工作区根目录
-- `build/` 子目录
+Automatically detects `compile_commands.json` in:
+- Workspace root directory
+- `build/` subdirectory
 
-### V0.4: CMake 任务系统
+### V0.4: CMake Task System
 
-通过 Zed 任务系统提供 CMake 操作。
+Provides CMake operations through Zed task system.
 
-## 配置
+## Configuration
 
 ### Language Server
 
-扩展自动为 C/C++ 文件提供 clangd 语言服务器。无需额外配置。
+Extension automatically provides clangd language server for C/C++ files. No additional configuration needed.
 
-### CMake 任务
+### CMake Tasks
 
-1. 复制任务文件模板到工作区：
+1. Copy task template to workspace:
    ```
    cp docs/zed-tasks-example.json .zed/tasks.json
    ```
 
-2. 在 Zed 中打开任务面板：`Ctrl+Shift+T`
+2. Open task panel in Zed: `Ctrl+Shift+T`
 
-3. 选择要运行的任务：
-   - `CMake: Configure (Debug)` - 配置 CMake 项目
-   - `CMake: Build (Debug)` - 构建 Debug 版本
-   - `CMake: Configure (Release)` - 配置 Release 版本
-   - `CMake: Build (Release)` - 构建 Release 版本
+3. Select task to run:
+   - `CMake: Configure (Debug)` - Configure CMake project
+   - `CMake: Build (Debug)` - Build Debug version
+   - `CMake: Configure (Release)` - Configure Release version
+   - `CMake: Build (Release)` - Build Release version
 
-### 自定义构建目录
+### Custom Build Directory
 
-如果使用不同的构建目录，编辑 `.zed/tasks.json`：
+If using a different build directory, edit `.zed/tasks.json`:
 
 ```json
 {
@@ -97,89 +97,89 @@ Zed 支持本地开发扩展（Dev Extension），无需发布即可使用：
     "-S",
     "$ZED_WORKTREE_ROOT",
     "-B",
-    "$ZED_WORKTREE_ROOT/cmake-build-debug",  // 修改此处
+    "$ZED_WORKTREE_ROOT/cmake-build-debug",  // Modify here
     "-DCMAKE_BUILD_TYPE=Debug"
   ]
 }
 ```
 
-## 故障排除
+## Troubleshooting
 
-### clangd 无法启动
+### clangd Cannot Start
 
-**错误**: "找不到 clangd"
+**Error**: "clangd not found"
 
-**解决方案**:
-1. 安装 LLVM: https://llvm.org/builds/
-2. 确保 `clangd.exe` 在 PATH 中
-3. 重启 Zed
+**Solution**:
+1. Install LLVM: https://llvm.org/builds/
+2. Ensure `clangd.exe` is in PATH
+3. Restart Zed
 
-### 找不到 Visual Studio
+### Visual Studio Not Found
 
-**错误**: "找不到 Visual Studio 2022+"
+**Error**: "Visual Studio 2022+ not found"
 
-**解决方案**:
-1. 安装 Visual Studio 2022
-2. 确保安装 "使用 C++ 的桌面开发" 工作负载
-3. 重启 Zed
+**Solution**:
+1. Install Visual Studio 2022
+2. Ensure "Desktop development with C++" workload is installed
+3. Restart Zed
 
-### 找不到 MSVC 工具链
+### MSVC Toolchain Not Found
 
-**错误**: "找不到 MSVC v143+ toolset"
+**Error**: "MSVC v143+ toolset not found"
 
-**解决方案**:
-1. 打开 Visual Studio Installer
-2. 修改 Visual Studio 2022 安装
-3. 确保选中 "MSVC v143 - VS 2022 C++ x64/x86 生成工具"
+**Solution**:
+1. Open Visual Studio Installer
+2. Modify Visual Studio 2022 installation
+3. Ensure "MSVC v143 - VS 2022 C++ x64/x86 build tools" is checked
 
-### 找不到 Windows SDK
+### Windows SDK Not Found
 
-**错误**: 扩展生成降级配置，SDK 路径注释显示
+**Error**: Extension generates degraded config, SDK paths commented
 
-**解决方案**:
-1. 打开 Visual Studio Installer
-2. 修改 Visual Studio 2022 安装
-3. 确保选中 "Windows 11 SDK" 或 "Windows 10 SDK"
+**Solution**:
+1. Open Visual Studio Installer
+2. Modify Visual Studio 2022 installation
+3. Ensure "Windows 11 SDK" or "Windows 10 SDK" is checked
 
-## 项目结构
+## Project Structure
 
 ```
 zed-msvc-toolkit/
 ├── src/
 │   ├── cmake/
-│   │   ├── compile_db.rs    # compile_commands.json 探测
-│   │   ├── tasks.rs         # 任务文件生成 (V0.4)
-│   │   └── tools.rs         # CMake 工具探测
+│   │   ├── compile_db.rs    # compile_commands.json detection
+│   │   ├── tasks.rs         # Task file generation (V0.4)
+│   │   └── tools.rs         # CMake tool detection
 │   ├── environment/
-│   │   ├── msvc.rs          # MSVC 工具链探测
-│   │   ├── vswhere.rs       # vswhere.exe 调用
-│   │   ├── windows_sdk.rs   # Windows SDK 探测
-│   │   └── tools.rs         # 工具查找辅助
+│   │   ├── msvc.rs          # MSVC toolchain detection
+│   │   ├── vswhere.rs       # vswhere.exe invocation
+│   │   ├── windows_sdk.rs   # Windows SDK detection
+│   │   └── tools.rs         # Tool lookup helpers
 │   ├── lsp/
-│   │   ├── clangd_config.rs # .clangd 配置生成
-│   │   └── server.rs        # 语言服务器启动
-│   ├── debug/               # 调试支持 (V0.5 待实现)
-│   ├── error.rs             # 错误类型
-│   ├── lib.rs               # 扩展入口
-│   └── paths.rs             # 路径处理
+│   │   ├── clangd_config.rs # .clangd config generation
+│   │   └── server.rs        # Language server startup
+│   ├── debug/               # Debug support (V0.5 TODO)
+│   ├── error.rs             # Error types
+│   ├── lib.rs               # Extension entry
+│   └── paths.rs             # Path handling
 ├── docs/
-│   ├── USAGE.md             # 本文档
-│   ├── TESTING.md           # 测试指南
-│   └── zed-tasks-example.json # 任务文件示例
-├── extension.toml           # 扩展清单
-├── Cargo.toml               # Rust 项目配置
-└── README.md                # 项目说明
+│   ├── USAGE.md             # This document
+│   ├── TESTING.md           # Testing guide
+│   └── zed-tasks-example.json # Task file example
+├── extension.toml           # Extension manifest
+├── Cargo.toml               # Rust project config
+└── README.md                # Project description
 ```
 
-## 版本历史
+## Version History
 
-- **V0.1** (2026-05-20): MSVC 环境探测和 clangd 配置
-- **V0.2** (2026-05-20): 编译数据库支持
-- **V0.3** (2026-05-20): CMake 命令生成基础设施
-- **V0.4** (2026-05-20): 任务系统集成
-- **V0.5** (计划): DAP 调试支持
-- **V1.0** (计划): 零配置调试
+- **V0.1** (2026-05-20): MSVC environment detection and clangd configuration
+- **V0.2** (2026-05-20): Compile database support
+- **V0.3** (2026-05-20): CMake command generation infrastructure
+- **V0.4** (2026-05-20): Task system integration
+- **V0.5** (Planned): DAP debugging support
+- **V1.0** (Planned): Zero-config debugging
 
-## 许可证
+## License
 
 MIT License

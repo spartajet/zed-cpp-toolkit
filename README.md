@@ -2,7 +2,7 @@
 
 MSVC and clangd assistant for Windows C++ CMake projects in Zed.
 
-## Version 0.4.0
+## Version 0.5.0
 
 ### Features
 
@@ -14,19 +14,20 @@ MSVC and clangd assistant for Windows C++ CMake projects in Zed.
 
 ## Documentation
 
-- **[使用说明 (USAGE.md)](docs/USAGE.md)** - 安装、配置和使用指南
-- **[测试指南 (TESTING.md)](docs/TESTING.md)** - 单元测试和集成测试说明
+- **[Usage Guide (docs/USAGE.md)](docs/USAGE.md)** - Installation, configuration, and usage guide
+- **[Testing Guide (docs/TESTING.md)](docs/TESTING.md)** - Unit and integration testing instructions
+- **[中文文档 (docs/zh-CN/)](docs/zh-CN/)** - Chinese documentation
 
 ## Quick Start
 
 ### Installation
 
 ```bash
-# 编译
+# Build
 rustup target add wasm32-unknown-unknown
 cargo build --target wasm32-unknown-unknown --release
 
-# 安装到 Zed
+# Install to Zed
 mkdir -p "$USERPROFILE/.zed/extensions/zed-msvc-toolkit"
 cp target/wasm32-unknown-unknown/release/zed_msvc_toolkit.wasm "$USERPROFILE/.zed/extensions/zed-msvc-toolkit/"
 cp extension.toml "$USERPROFILE/.zed/extensions/zed-msvc-toolkit/"
