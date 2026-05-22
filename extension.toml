@@ -1,7 +1,7 @@
 id = "msvc-cpp-toolkit"
 name = "Zed MSVC C++ Assistant"
 description = "MSVC and clangd assistant for Windows C++ CMake projects in Zed."
-version = "0.5.0"
+version = "0.5.1"
 schema_version = 1
 authors = ["Dr.Guo"]
 repository = "https://github.com/spartajet/zed-msvc-toolkit.git"

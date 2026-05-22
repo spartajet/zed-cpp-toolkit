@@ -127,11 +127,13 @@ fn build_script(options: &TaskOptions, target: Option<&str>) -> String {
 
 fn run_script(options: &TaskOptions, output: &str) -> String {
     let output = output.replace('/', "\\");
-    format!(
-        "& \"$ZED_WORKTREE_ROOT\\{}\\{}\"",
+    let exe_path = format!(
+        "$ZED_WORKTREE_ROOT\\{}\\{}",
         options.build_dir.replace('\'', "''"),
         output.replace('"', "`\"")
-    )
+    );
+    // 使用 Start-Process 确保进程独立运行，不依赖 PowerShell 会话
+    format!("Start-Process -FilePath \"{}\"", exe_path)
 }
 
 fn developer_environment_script(options: &TaskOptions, command: &str) -> String {
@@ -258,7 +260,10 @@ mod tests {
     fn build_dir_for_type_maps_all_cmake_build_types() {
         assert_eq!(build_dir_for_type("Debug"), "cmake-build-debug");
         assert_eq!(build_dir_for_type("Release"), "cmake-build-release");
-        assert_eq!(build_dir_for_type("RelWithDebInfo"), "cmake-build-relwithdebinfo");
+        assert_eq!(
+            build_dir_for_type("RelWithDebInfo"),
+            "cmake-build-relwithdebinfo"
+        );
         assert_eq!(build_dir_for_type("MinSizeRel"), "cmake-build-minsizerel");
     }
 
