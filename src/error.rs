@@ -10,11 +10,7 @@ pub enum ToolkitError {
     MissingMsvcToolset,
     MissingClangd,
     MissingCmake,
-    // 预留错误：neocmakelsp 相关
-    #[allow(dead_code)]
     MissingNeocmakelsp,
-    #[allow(dead_code)]
-    NeocmakeDownloadFailed(String),
     #[allow(dead_code)]
     NeocmakeConfigParseError(String),
     // 预留错误：通用工具和配置
@@ -55,10 +51,7 @@ impl ToolkitError {
                 "cmake not found. Please install CMake and add it to PATH.".to_string()
             }
             Self::MissingNeocmakelsp => {
-                "neocmakelsp not found, will attempt to download from GitHub Releases.".to_string()
-            }
-            Self::NeocmakeDownloadFailed(url) => {
-                format!("Failed to download neocmakelsp: {url}")
+                "neocmakelsp not found. Please install neocmakelsp and add it to PATH. See: https://github.com/Neuttions/neocmakelsp".to_string()
             }
             Self::NeocmakeConfigParseError(detail) => {
                 format!("Failed to parse neocmake config: {detail}, using default configuration.")
