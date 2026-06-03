@@ -3,6 +3,7 @@ use zed_extension_api as zed;
 // CMake integration module (reserved feature, currently only used by clangd LSP)
 #[allow(unused_imports)]
 mod cmake;
+mod config;
 mod debug;
 mod environment;
 mod error;
