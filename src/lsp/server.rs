@@ -102,9 +102,11 @@ fn write_generated_clangd(
         environment.sdk_includes.len()
     ));
     let input = ClangdConfigInput {
-        msvc_include: environment.msvc_include,
+        compiler: "clang-cl".to_string(),
+        compile_commands_dir: compile_db_path.unwrap_or_else(|| "build".to_string()),
+        extra_flags: Vec::new(),
+        msvc_include: Some(environment.msvc_include),
         sdk_includes: environment.sdk_includes,
-        compile_database_path: compile_db_path,
     };
 
     match decide_clangd_file(root_path, None, &input) {

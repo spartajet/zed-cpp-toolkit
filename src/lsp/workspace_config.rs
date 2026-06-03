@@ -32,9 +32,11 @@ mod tests {
 
     fn input() -> ClangdConfigInput {
         ClangdConfigInput {
-            msvc_include: r"C:\VS\VC\Tools\MSVC\14.40.33807\include".to_string(),
+            compiler: "clang-cl".to_string(),
+            compile_commands_dir: "build".to_string(),
+            extra_flags: Vec::new(),
+            msvc_include: Some(r"C:\VS\VC\Tools\MSVC\14.40.33807\include".to_string()),
             sdk_includes: Vec::new(),
-            compile_database_path: None,
         }
     }
 
