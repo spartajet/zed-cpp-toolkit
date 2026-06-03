@@ -250,6 +250,15 @@ mod tests {
     }
 
     #[test]
+    fn msvc_cmake_preset_pins_cmake_compilers_to_cl() {
+        let config = resolve_config_for_host(None, HostPlatform::Windows).unwrap();
+        let configure = config.build.configure.unwrap();
+
+        assert!(configure.contains("-DCMAKE_C_COMPILER=cl"));
+        assert!(configure.contains("-DCMAKE_CXX_COMPILER=cl"));
+    }
+
+    #[test]
     fn clion_style_is_only_used_when_explicit() {
         let config = resolve_config(Some(UserConfig {
             preset: Some("gcc-cmake-ninja".to_string()),

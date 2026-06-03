@@ -24,6 +24,10 @@ fn cmake_preset(
     cxx: &str,
     clangd_compiler: &str,
 ) -> UserConfig {
+    let configure = format!(
+        "cmake -S . -B {{build_dir}} -G Ninja -DCMAKE_BUILD_TYPE={{build_type}} -DCMAKE_C_COMPILER={cc} -DCMAKE_CXX_COMPILER={cxx} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+    );
+
     UserConfig {
         preset: Some(preset.to_string()),
         toolchain: ToolchainConfig {
@@ -35,7 +39,7 @@ fn cmake_preset(
             system: Some("cmake".to_string()),
             build_dir_style: Some(BuildDirStyle::Build),
             build_type: Some("Debug".to_string()),
-            configure: Some("cmake -S . -B {build_dir} -G Ninja -DCMAKE_BUILD_TYPE={build_type} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON".to_string()),
+            configure: Some(configure),
             build: Some("cmake --build {build_dir}".to_string()),
             clean: Some("cmake --build {build_dir} --target clean".to_string()),
             ..BuildConfig::default()
