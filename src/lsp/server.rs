@@ -9,7 +9,7 @@ use crate::lsp::workspace_config::{ClangdFileDecision, decide_clangd_file};
 use std::collections::HashMap;
 use zed_extension_api as zed;
 
-pub const LANGUAGE_SERVER_ID: &str = "msvc-cpp-clangd";
+pub const LANGUAGE_SERVER_ID: &str = "cpp-toolkit-clangd";
 
 pub fn clangd_args() -> Vec<String> {
     vec![
@@ -26,19 +26,28 @@ pub fn validate_language_server_id(id: &str) -> ToolkitResult<()> {
     }
 }
 
-pub fn build_clangd_command(command: String, env: Vec<(String, String)>) -> zed::Command {
-    zed::Command {
-        command,
-        args: clangd_args(),
-        env,
+pub fn build_clangd_command(
+    command: String,
+    env: Vec<(String, String)>,
+    query_driver: Vec<String>,
+) -> zed::Command {
+    let mut args = clangd_args();
+    if !query_driver.is_empty() {
+        args.push(format!("--query-driver={}", query_driver.join(",")));
     }
+
+    zed::Command { command, args, env }
 }
 
 pub fn command_from_worktree(worktree: &zed::Worktree) -> ToolkitResult<zed::Command> {
     log_message("looking up clangd via worktree.which(\"clangd\")");
     let clangd = require_clangd(worktree.which("clangd"))?;
     log_message(&format!("clangd found: {clangd}"));
-    Ok(build_clangd_command(clangd, worktree.shell_env()))
+    Ok(build_clangd_command(
+        clangd,
+        worktree.shell_env(),
+        Vec::new(),
+    ))
 }
 
 pub fn prepare_workspace_config(
@@ -492,7 +501,18 @@ mod tests {
 
     #[test]
     fn accepts_expected_language_server_id() {
-        assert_eq!(validate_language_server_id("msvc-cpp-clangd"), Ok(()));
+        assert_eq!(validate_language_server_id("cpp-toolkit-clangd"), Ok(()));
+    }
+
+    #[test]
+    fn build_clangd_command_includes_query_driver() {
+        let command = build_clangd_command(
+            "clangd".to_string(),
+            Vec::new(),
+            vec!["gcc".to_string(), "g++".to_string()],
+        );
+
+        assert!(command.args.contains(&"--query-driver=gcc,g++".to_string()));
     }
 
     #[test]

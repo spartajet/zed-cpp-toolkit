@@ -53,7 +53,7 @@ impl zed::Extension for MsvcToolkitExtension {
 
         // Route to the appropriate LSP based on ID
         let result = match language_server_id {
-            "msvc-cpp-clangd" => {
+            "cpp-toolkit-clangd" => {
                 if let Err(error_msg) =
                     validate_and_prepare_clangd(worktree, language_server_id_value)
                 {
@@ -134,7 +134,7 @@ fn validate_and_prepare_clangd(
     worktree: &zed::Worktree,
     language_server_id: &zed::LanguageServerId,
 ) -> Result<(), String> {
-    if let Err(error) = lsp::server::validate_language_server_id("msvc-cpp-clangd") {
+    if let Err(error) = lsp::server::validate_language_server_id("cpp-toolkit-clangd") {
         debug::log_error("language server id validation failed", &error);
         set_lsp_status(
             language_server_id,
