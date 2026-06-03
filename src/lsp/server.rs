@@ -108,6 +108,10 @@ fn prepare_workspace_config_with_config(
         "prepare_workspace_config started: root={root_path}, preset={}",
         config.preset
     ));
+    if let Err(error) = write_example_config_if_missing(root_path, runner) {
+        crate::debug::log_error("failed to write example cpp-toolkit config", &error);
+        log_message("continuing without blocking clangd startup");
+    }
 
     if let Some(contents) = &existing_clangd {
         log_message(&format!(
@@ -553,6 +557,52 @@ fn write_tasks_file(
     write_workspace_text_file(root_path, &[".zed", "tasks.json"], contents, runner)
 }
 
+fn write_example_config_if_missing(
+    root_path: &str,
+    runner: &impl crate::environment::tools::CommandRunner,
+) -> ToolkitResult<()> {
+    let components = [".zed", "cpp-toolkit.example.toml"];
+    if workspace_file_exists(root_path, &components, runner)? {
+        log_message(".zed/cpp-toolkit.example.toml already exists; leaving it unchanged");
+        return Ok(());
+    }
+
+    write_workspace_text_file(root_path, &components, CPP_TOOLKIT_EXAMPLE_CONFIG, runner)?;
+    log_message("wrote .zed/cpp-toolkit.example.toml example config");
+    Ok(())
+}
+
+fn workspace_file_exists(
+    root_path: &str,
+    components: &[&str],
+    runner: &impl crate::environment::tools::CommandRunner,
+) -> ToolkitResult<bool> {
+    match shell_for_root_path(root_path) {
+        crate::build::shell::ShellKind::Powershell => {
+            let path = join_windows_components(root_path, components);
+            let script = format!(
+                "if (Test-Path -LiteralPath {}) {{ 'True' }} else {{ 'False' }}",
+                powershell_single_quote(&path)
+            );
+            let args = vec!["-NoProfile".to_string(), "-Command".to_string(), script];
+            let output = runner.run_command("powershell", &args)?;
+            crate::environment::tools::ensure_success("powershell", output)
+                .map(|stdout| stdout.trim().eq_ignore_ascii_case("true"))
+        }
+        crate::build::shell::ShellKind::Sh => {
+            let path = join_unix_components(root_path, components);
+            let script = format!(
+                "if [ -e {} ]; then printf true; else printf false; fi",
+                sh_single_quote(&path)
+            );
+            let args = vec!["-lc".to_string(), script];
+            let output = runner.run_command("sh", &args)?;
+            crate::environment::tools::ensure_success("sh", output)
+                .map(|stdout| stdout.trim() == "true")
+        }
+    }
+}
+
 fn write_workspace_text_file(
     root_path: &str,
     components: &[&str],
@@ -646,6 +696,35 @@ fn one_line_preview(contents: &str) -> String {
 
     preview
 }
+
+const CPP_TOOLKIT_EXAMPLE_CONFIG: &str = r#"# Example cpp-toolkit project configuration.
+# Copy this file to .zed/cpp-toolkit.toml and edit it for your project.
+
+preset = "gcc-cmake-ninja"
+
+[toolchain]
+cc = "gcc"
+cxx = "g++"
+
+[build]
+system = "cmake"
+build_dir_style = "build"
+build_type = "Debug"
+configure = "cmake -S . -B {build_dir} -G Ninja -DCMAKE_BUILD_TYPE={build_type} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+build = "cmake --build {build_dir}"
+clean = "cmake --build {build_dir} --target clean"
+
+[run]
+command = "./build/app"
+cwd = "$ZED_WORKTREE_ROOT"
+
+[clangd]
+command = "clangd"
+compiler = "g++"
+compile_commands_dir = "build"
+extra_flags = ["-std=c++20"]
+query_driver = ["gcc", "g++"]
+"#;
 
 #[cfg(test)]
 mod tests {
@@ -868,11 +947,14 @@ mod tests {
             ..crate::config::schema::UserConfig::default()
         }))
         .unwrap();
-        let runner = QueueRunner::new([CommandOutput {
-            status: Some(0),
-            stdout: String::new(),
-            stderr: String::new(),
-        }]);
+        let runner = QueueRunner::new([
+            existing_example_output(),
+            CommandOutput {
+                status: Some(0),
+                stdout: String::new(),
+                stderr: String::new(),
+            },
+        ]);
 
         let result = prepare_workspace_config_with_config(
             "C:/repo",
@@ -883,16 +965,78 @@ mod tests {
 
         assert_eq!(result, Ok(()));
         let calls = runner.calls.borrow();
+        assert!(calls.iter().any(|(command, args)| {
+            command == "powershell"
+                && args.iter().any(|arg| {
+                    arg.contains("C++: Build") && arg.contains("'C:/repo\\.zed\\tasks.json'")
+                })
+        }));
+        assert!(
+            !calls
+                .iter()
+                .any(|(_, args)| args.iter().any(|arg| arg.contains("'C:/repo\\.clangd'")))
+        );
+    }
+
+    #[test]
+    fn writes_example_config_during_workspace_preparation() {
+        let config = resolve_config(Some(crate::config::schema::UserConfig {
+            preset: Some("gcc-cmake-ninja".to_string()),
+            ..crate::config::schema::UserConfig::default()
+        }))
+        .unwrap();
+        let runner = QueueRunner::new([
+            CommandOutput {
+                status: Some(0),
+                stdout: "False\n".to_string(),
+                stderr: String::new(),
+            },
+            CommandOutput {
+                status: Some(0),
+                stdout: String::new(),
+                stderr: String::new(),
+            },
+            CommandOutput {
+                status: Some(0),
+                stdout: String::new(),
+                stderr: String::new(),
+            },
+        ]);
+
+        let result = prepare_workspace_config_with_config("C:/repo", None, &config, &runner);
+
+        assert_eq!(result, Ok(()));
+        assert!(runner.calls.borrow().iter().any(|(command, args)| {
+            command == "powershell"
+                && args.iter().any(|arg| {
+                    arg.contains("[System.IO.File]::WriteAllText")
+                        && arg.contains("'C:/repo\\.zed\\cpp-toolkit.example.toml'")
+                        && arg.contains("preset = \"gcc-cmake-ninja\"")
+                        && arg.contains("[clangd]")
+                })
+        }));
+    }
+
+    #[test]
+    fn does_not_overwrite_existing_example_config() {
+        let runner = QueueRunner::new([CommandOutput {
+            status: Some(0),
+            stdout: "True\n".to_string(),
+            stderr: String::new(),
+        }]);
+
+        write_example_config_if_missing("C:/repo", &runner).unwrap();
+
+        let calls = runner.calls.borrow();
         assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].0, "powershell");
         assert!(calls[0].1.iter().any(|arg| {
-            arg.contains("C++: Build") && arg.contains("'C:/repo\\.zed\\tasks.json'")
+            arg.contains("Test-Path") && arg.contains("C:/repo\\.zed\\cpp-toolkit.example.toml")
         }));
         assert!(
             !calls[0]
                 .1
                 .iter()
-                .any(|arg| arg.contains("'C:/repo\\.clangd'"))
+                .any(|arg| arg.contains("[System.IO.File]::WriteAllText"))
         );
     }
 
@@ -985,6 +1129,14 @@ mod tests {
         }
     }
 
+    fn existing_example_output() -> CommandOutput {
+        CommandOutput {
+            status: Some(0),
+            stdout: "True\n".to_string(),
+            stderr: String::new(),
+        }
+    }
+
     #[test]
     fn config_driven_workspace_generation_writes_clangd_and_tasks_without_msvc_discovery() {
         let config = resolve_config(Some(crate::config::schema::UserConfig {
@@ -997,6 +1149,7 @@ mod tests {
         }))
         .unwrap();
         let runner = QueueRunner::new([
+            existing_example_output(),
             CommandOutput {
                 status: Some(0),
                 stdout: String::new(),
@@ -1013,7 +1166,6 @@ mod tests {
 
         assert_eq!(result, Ok(()));
         let calls = runner.calls.borrow();
-        assert_eq!(calls.len(), 2);
         assert!(calls.iter().any(|(command, args)| {
             command == "powershell"
                 && args.iter().any(|arg| {
@@ -1037,6 +1189,7 @@ mod tests {
     #[test]
     fn continues_when_clangd_config_is_missing() {
         let runner = QueueRunner::new([
+            existing_example_output(),
             CommandOutput {
                 status: Some(0),
                 stdout: "false\n".to_string(),
@@ -1113,6 +1266,7 @@ mod tests {
         .unwrap();
 
         let runner = QueueRunner::new([
+            existing_example_output(),
             CommandOutput {
                 status: Some(0),
                 stdout: "false\n".to_string(),
