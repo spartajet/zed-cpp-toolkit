@@ -561,14 +561,19 @@ fn write_example_config_if_missing(
     root_path: &str,
     runner: &impl crate::environment::tools::CommandRunner,
 ) -> ToolkitResult<()> {
-    let components = [".zed", "cpp-toolkit.example.toml"];
-    if workspace_file_exists(root_path, &components, runner)? {
-        log_message(".zed/cpp-toolkit.example.toml already exists; leaving it unchanged");
-        return Ok(());
-    }
+    for example in CPP_TOOLKIT_EXAMPLE_CONFIGS {
+        let components = [".zed", example.file_name];
+        if workspace_file_exists(root_path, &components, runner)? {
+            log_message(&format!(
+                ".zed/{} already exists; leaving it unchanged",
+                example.file_name
+            ));
+            continue;
+        }
 
-    write_workspace_text_file(root_path, &components, CPP_TOOLKIT_EXAMPLE_CONFIG, runner)?;
-    log_message("wrote .zed/cpp-toolkit.example.toml example config");
+        write_workspace_text_file(root_path, &components, example.contents, runner)?;
+        log_message(&format!("wrote .zed/{} example config", example.file_name));
+    }
     Ok(())
 }
 
@@ -697,12 +702,63 @@ fn one_line_preview(contents: &str) -> String {
     preview
 }
 
-const CPP_TOOLKIT_EXAMPLE_CONFIG: &str = r#"# Example cpp-toolkit project configuration.
+struct ExampleConfig {
+    file_name: &'static str,
+    contents: &'static str,
+}
+
+const CPP_TOOLKIT_EXAMPLE_CONFIGS: &[ExampleConfig] = &[
+    ExampleConfig {
+        file_name: "cpp-toolkit.windows.example.toml",
+        contents: WINDOWS_EXAMPLE_CONFIG,
+    },
+    ExampleConfig {
+        file_name: "cpp-toolkit.linux.example.toml",
+        contents: LINUX_EXAMPLE_CONFIG,
+    },
+    ExampleConfig {
+        file_name: "cpp-toolkit.macos.example.toml",
+        contents: MACOS_EXAMPLE_CONFIG,
+    },
+];
+
+const WINDOWS_EXAMPLE_CONFIG: &str = r#"# Example cpp-toolkit configuration for Windows/MSVC.
+# Copy this file to .zed/cpp-toolkit.toml and edit it for your project.
+
+preset = "msvc-cmake-ninja"
+
+[toolchain]
+name = "msvc"
+cc = "cl"
+cxx = "cl"
+
+[build]
+system = "cmake"
+build_dir_style = "build"
+build_type = "Debug"
+configure = "cmake -S . -B {build_dir} -G Ninja -DCMAKE_BUILD_TYPE={build_type} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+build = "cmake --build {build_dir}"
+clean = "cmake --build {build_dir} --target clean"
+
+[run]
+command = ".\\build\\app.exe"
+cwd = "$ZED_WORKTREE_ROOT"
+
+[clangd]
+command = "clangd"
+compiler = "clang-cl"
+compile_commands_dir = "build"
+extra_flags = ["/std:c++20"]
+query_driver = []
+"#;
+
+const LINUX_EXAMPLE_CONFIG: &str = r#"# Example cpp-toolkit configuration for Linux/GCC.
 # Copy this file to .zed/cpp-toolkit.toml and edit it for your project.
 
 preset = "gcc-cmake-ninja"
 
 [toolchain]
+name = "gcc"
 cc = "gcc"
 cxx = "g++"
 
@@ -724,6 +780,36 @@ compiler = "g++"
 compile_commands_dir = "build"
 extra_flags = ["-std=c++20"]
 query_driver = ["gcc", "g++"]
+"#;
+
+const MACOS_EXAMPLE_CONFIG: &str = r#"# Example cpp-toolkit configuration for macOS/Clang.
+# Copy this file to .zed/cpp-toolkit.toml and edit it for your project.
+
+preset = "clang-cmake-ninja"
+
+[toolchain]
+name = "clang"
+cc = "clang"
+cxx = "clang++"
+
+[build]
+system = "cmake"
+build_dir_style = "build"
+build_type = "Debug"
+configure = "cmake -S . -B {build_dir} -G Ninja -DCMAKE_BUILD_TYPE={build_type} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+build = "cmake --build {build_dir}"
+clean = "cmake --build {build_dir} --target clean"
+
+[run]
+command = "./build/app"
+cwd = "$ZED_WORKTREE_ROOT"
+
+[clangd]
+command = "clangd"
+compiler = "clang++"
+compile_commands_dir = "build"
+extra_flags = ["-std=c++20"]
+query_driver = ["clang", "clang++"]
 "#;
 
 #[cfg(test)]
@@ -949,6 +1035,8 @@ mod tests {
         .unwrap();
         let runner = QueueRunner::new([
             existing_example_output(),
+            existing_example_output(),
+            existing_example_output(),
             CommandOutput {
                 status: Some(0),
                 stdout: String::new(),
@@ -979,7 +1067,7 @@ mod tests {
     }
 
     #[test]
-    fn writes_example_config_during_workspace_preparation() {
+    fn writes_platform_example_configs_during_workspace_preparation() {
         let config = resolve_config(Some(crate::config::schema::UserConfig {
             preset: Some("gcc-cmake-ninja".to_string()),
             ..crate::config::schema::UserConfig::default()
@@ -998,6 +1086,21 @@ mod tests {
             },
             CommandOutput {
                 status: Some(0),
+                stdout: "False\n".to_string(),
+                stderr: String::new(),
+            },
+            CommandOutput {
+                status: Some(0),
+                stdout: String::new(),
+                stderr: String::new(),
+            },
+            CommandOutput {
+                status: Some(0),
+                stdout: "False\n".to_string(),
+                stderr: String::new(),
+            },
+            CommandOutput {
+                status: Some(0),
                 stdout: String::new(),
                 stderr: String::new(),
             },
@@ -1006,38 +1109,97 @@ mod tests {
         let result = prepare_workspace_config_with_config("C:/repo", None, &config, &runner);
 
         assert_eq!(result, Ok(()));
-        assert!(runner.calls.borrow().iter().any(|(command, args)| {
-            command == "powershell"
-                && args.iter().any(|arg| {
-                    arg.contains("[System.IO.File]::WriteAllText")
-                        && arg.contains("'C:/repo\\.zed\\cpp-toolkit.example.toml'")
-                        && arg.contains("preset = \"gcc-cmake-ninja\"")
-                        && arg.contains("[clangd]")
-                })
-        }));
+        let calls = runner.calls.borrow();
+        assert_platform_example_written(
+            &calls,
+            "cpp-toolkit.windows.example.toml",
+            "preset = \"msvc-cmake-ninja\"",
+            "compiler = \"clang-cl\"",
+        );
+        assert_platform_example_written(
+            &calls,
+            "cpp-toolkit.linux.example.toml",
+            "preset = \"gcc-cmake-ninja\"",
+            "compiler = \"g++\"",
+        );
+        assert_platform_example_written(
+            &calls,
+            "cpp-toolkit.macos.example.toml",
+            "preset = \"clang-cmake-ninja\"",
+            "compiler = \"clang++\"",
+        );
     }
 
     #[test]
-    fn does_not_overwrite_existing_example_config() {
-        let runner = QueueRunner::new([CommandOutput {
-            status: Some(0),
-            stdout: "True\n".to_string(),
-            stderr: String::new(),
-        }]);
+    fn does_not_overwrite_existing_platform_example_config() {
+        let runner = QueueRunner::new([
+            CommandOutput {
+                status: Some(0),
+                stdout: "True\n".to_string(),
+                stderr: String::new(),
+            },
+            CommandOutput {
+                status: Some(0),
+                stdout: "False\n".to_string(),
+                stderr: String::new(),
+            },
+            CommandOutput {
+                status: Some(0),
+                stdout: String::new(),
+                stderr: String::new(),
+            },
+            CommandOutput {
+                status: Some(0),
+                stdout: "True\n".to_string(),
+                stderr: String::new(),
+            },
+        ]);
 
         write_example_config_if_missing("C:/repo", &runner).unwrap();
 
         let calls = runner.calls.borrow();
-        assert_eq!(calls.len(), 1);
-        assert!(calls[0].1.iter().any(|arg| {
-            arg.contains("Test-Path") && arg.contains("C:/repo\\.zed\\cpp-toolkit.example.toml")
-        }));
+        assert!(!platform_example_was_written(
+            &calls,
+            "cpp-toolkit.windows.example.toml"
+        ));
+        assert!(platform_example_was_written(
+            &calls,
+            "cpp-toolkit.linux.example.toml"
+        ));
+        assert!(!platform_example_was_written(
+            &calls,
+            "cpp-toolkit.macos.example.toml"
+        ));
+    }
+
+    fn assert_platform_example_written(
+        calls: &[(String, Vec<String>)],
+        file_name: &str,
+        preset: &str,
+        compiler: &str,
+    ) {
         assert!(
-            !calls[0]
-                .1
-                .iter()
-                .any(|arg| arg.contains("[System.IO.File]::WriteAllText"))
+            calls.iter().any(|(command, args)| {
+                command == "powershell"
+                    && args.iter().any(|arg| {
+                        arg.contains("[System.IO.File]::WriteAllText")
+                            && arg.contains(file_name)
+                            && arg.contains(preset)
+                            && arg.contains(compiler)
+                            && arg.contains("Copy this file to .zed/cpp-toolkit.toml")
+                    })
+            }),
+            "expected {file_name} to be written"
         );
+    }
+
+    fn platform_example_was_written(calls: &[(String, Vec<String>)], file_name: &str) -> bool {
+        calls.iter().any(|(command, args)| {
+            command == "powershell"
+                && args.iter().any(|arg| {
+                    arg.contains("[System.IO.File]::WriteAllText") && arg.contains(file_name)
+                })
+        })
     }
 
     #[test]
@@ -1150,6 +1312,8 @@ mod tests {
         .unwrap();
         let runner = QueueRunner::new([
             existing_example_output(),
+            existing_example_output(),
+            existing_example_output(),
             CommandOutput {
                 status: Some(0),
                 stdout: String::new(),
@@ -1189,6 +1353,8 @@ mod tests {
     #[test]
     fn continues_when_clangd_config_is_missing() {
         let runner = QueueRunner::new([
+            existing_example_output(),
+            existing_example_output(),
             existing_example_output(),
             CommandOutput {
                 status: Some(0),
@@ -1266,6 +1432,8 @@ mod tests {
         .unwrap();
 
         let runner = QueueRunner::new([
+            existing_example_output(),
+            existing_example_output(),
             existing_example_output(),
             CommandOutput {
                 status: Some(0),
