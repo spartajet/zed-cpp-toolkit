@@ -2,6 +2,7 @@ use crate::build::shell::default_shell_for_current_platform;
 use crate::build::tasks::generate_cpp_tasks_json;
 use crate::cmake::{CmakeTarget, TaskOptions, discover_compile_database, generate_tasks_json};
 use crate::config::loader::load_effective_config;
+#[cfg(test)]
 use crate::config::merge::resolve_config;
 use crate::config::schema::EffectiveConfig;
 use crate::debug::log_message;
@@ -77,6 +78,7 @@ fn resolve_clangd_command(
     }
 }
 
+#[cfg(test)]
 pub fn prepare_workspace_config(
     root_path: &str,
     existing_clangd: Option<String>,
