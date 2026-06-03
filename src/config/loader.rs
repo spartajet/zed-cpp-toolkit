@@ -1,4 +1,4 @@
-use crate::config::merge::{parse_user_config, resolve_config};
+use crate::config::merge::{parse_user_config, resolve_config_for_root_path};
 use crate::config::schema::EffectiveConfig;
 use crate::error::ToolkitResult;
 use zed_extension_api as zed;
@@ -8,5 +8,5 @@ pub fn load_effective_config(worktree: &zed::Worktree) -> ToolkitResult<Effectiv
         Ok(contents) => Some(parse_user_config(&contents)?),
         Err(_) => None,
     };
-    resolve_config(user)
+    resolve_config_for_root_path(user, &worktree.root_path())
 }

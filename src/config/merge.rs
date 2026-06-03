@@ -5,21 +5,57 @@ use crate::config::schema::{
 };
 use crate::error::{ToolkitError, ToolkitResult};
 
-pub fn default_preset_for_current_platform() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "msvc-cmake-ninja"
-    } else if cfg!(target_os = "macos") {
-        "clang-cmake-ninja"
-    } else {
-        "gcc-cmake-ninja"
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostPlatform {
+    Windows,
+    Macos,
+    Linux,
+}
+
+impl HostPlatform {
+    pub fn from_root_path(root_path: &str) -> Self {
+        if is_windows_path(root_path) {
+            Self::Windows
+        } else if cfg!(target_os = "macos") {
+            Self::Macos
+        } else {
+            Self::Linux
+        }
     }
 }
 
+fn is_windows_path(path: &str) -> bool {
+    path.contains('\\') || path.as_bytes().get(1).is_some_and(|byte| *byte == b':')
+}
+
+pub fn default_preset_for_host_platform(platform: HostPlatform) -> &'static str {
+    match platform {
+        HostPlatform::Windows => "msvc-cmake-ninja",
+        HostPlatform::Macos => "clang-cmake-ninja",
+        HostPlatform::Linux => "gcc-cmake-ninja",
+    }
+}
+
+#[cfg(test)]
 pub fn resolve_config(user: Option<UserConfig>) -> ToolkitResult<EffectiveConfig> {
+    resolve_config_for_host(user, HostPlatform::from_root_path(""))
+}
+
+pub fn resolve_config_for_root_path(
+    user: Option<UserConfig>,
+    root_path: &str,
+) -> ToolkitResult<EffectiveConfig> {
+    resolve_config_for_host(user, HostPlatform::from_root_path(root_path))
+}
+
+pub fn resolve_config_for_host(
+    user: Option<UserConfig>,
+    host_platform: HostPlatform,
+) -> ToolkitResult<EffectiveConfig> {
     let preset_name = user
         .as_ref()
         .and_then(|config| config.preset.clone())
-        .unwrap_or_else(|| default_preset_for_current_platform().to_string());
+        .unwrap_or_else(|| default_preset_for_host_platform(host_platform).to_string());
     let preset = preset_config(&preset_name).ok_or_else(|| {
         ToolkitError::IoMessage(format!("未知 cpp-toolkit preset：{preset_name}"))
     })?;
@@ -202,6 +238,15 @@ mod tests {
         assert_eq!(config.build.build_dir, "build");
         assert_eq!(config.clangd.compile_commands_dir, "build");
         assert!(config.build.configure.unwrap().contains("-B build"));
+    }
+
+    #[test]
+    fn windows_host_path_uses_msvc_default_preset() {
+        let config = resolve_config_for_root_path(None, r"C:\repo").unwrap();
+
+        assert_eq!(config.preset, "msvc-cmake-ninja");
+        assert_eq!(config.toolchain.name, "msvc");
+        assert_eq!(config.clangd.compiler, "clang-cl");
     }
 
     #[test]

@@ -3,7 +3,7 @@ use crate::build::tasks::generate_cpp_tasks_json;
 use crate::cmake::{CmakeTarget, TaskOptions, discover_compile_database, generate_tasks_json};
 use crate::config::loader::load_effective_config;
 #[cfg(test)]
-use crate::config::merge::resolve_config;
+use crate::config::merge::{resolve_config, resolve_config_for_root_path};
 use crate::config::schema::EffectiveConfig;
 use crate::debug::log_message;
 use crate::environment::tools::{ZedCommandRunner, require_clangd};
@@ -94,7 +94,7 @@ pub fn prepare_workspace_config(
     existing_clangd: Option<String>,
     runner: &impl crate::environment::tools::CommandRunner,
 ) -> ToolkitResult<()> {
-    let config = resolve_config(None)?;
+    let config = resolve_config_for_root_path(None, root_path)?;
     prepare_workspace_config_with_config(root_path, existing_clangd, &config, runner)
 }
 
@@ -1087,6 +1087,8 @@ mod tests {
                 && args.iter().any(|arg| {
                     arg.contains("[System.IO.File]::WriteAllText")
                         && arg.contains("'C:/repo\\.clangd'")
+                        && arg.contains("Compiler: clang-cl")
+                        && !arg.contains("Compiler: g++")
                 })
         }));
     }
