@@ -37,20 +37,20 @@ cxx = "g++"
 
 [build]
 system = "cmake"
-build_dir = "build/debug"
+build_dir_style = "build"
 build_type = "Debug"
-configure = "cmake -S . -B build/debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
-build = "cmake --build build/debug"
-clean = "cmake --build build/debug --target clean"
+configure = "cmake -S . -B {build_dir} -G Ninja -DCMAKE_BUILD_TYPE={build_type} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+build = "cmake --build {build_dir}"
+clean = "cmake --build {build_dir} --target clean"
 
 [run]
-command = "./build/debug/app"
+command = "./build/app"
 cwd = "$ZED_WORKTREE_ROOT"
 
 [clangd]
 command = "clangd"
 compiler = "g++"
-compile_commands_dir = "build/debug"
+compile_commands_dir = "build"
 extra_flags = ["-std=c++20"]
 query_driver = ["gcc", "g++"]
 ```
@@ -105,6 +105,63 @@ extra_flags = ["-Iinclude", "-std=c++23"]
 
 Preset 只提供默认值。用户可以覆盖任意字段。
 
+## 构建目录命名风格
+
+CMake preset 默认使用简单的 `build` 目录。只有用户或 preset 显式设置 `build_dir_style = "clion"` 时，才使用 `cmake-build-debug` 这类 CLion 风格目录。
+
+`[build]` 支持以下字段：
+
+```toml
+[build]
+build_dir_style = "build"
+build_dir = ""
+build_type = "Debug"
+```
+
+支持的 `build_dir_style`：
+
+| 值 | Debug 结果 | Release 结果 | 说明 |
+| --- | --- | --- | --- |
+| `build` | `build` | `build` | 默认风格，最简单，跨平台一致 |
+| `clion` | `cmake-build-debug` | `cmake-build-release` | 只有显式设置时启用 |
+| `custom` | 使用 `build_dir` | 使用 `build_dir` | 用户完全指定目录 |
+
+构建目录解析优先级：
+
+1. 如果用户显式设置了 `build_dir`，使用 `build_dir`。
+2. 否则根据 `build_dir_style` 推导。
+3. 如果没有设置 `build_dir_style`，默认使用 `build`。
+
+示例：
+
+```toml
+preset = "gcc-cmake-ninja"
+
+[build]
+build_dir_style = "clion"
+build_type = "Debug"
+```
+
+最终推导：
+
+```text
+build_dir = "cmake-build-debug"
+```
+
+用户命令字符串和 preset 内部命令都可以使用模板变量：
+
+```toml
+[build]
+configure = "cmake -S . -B {build_dir} -G Ninja -DCMAKE_BUILD_TYPE={build_type}"
+build = "cmake --build {build_dir}"
+clean = "cmake --build {build_dir} --target clean"
+```
+
+第一版只需要支持以下模板变量：
+
+- `{build_dir}`：解析后的构建目录。
+- `{build_type}`：当前构建类型，例如 `Debug` 或 `Release`。
+
 ## `.clangd` 生成规则
 
 扩展必须为每个受支持项目生成 `.clangd`。
@@ -113,7 +170,7 @@ Preset 只提供默认值。用户可以覆盖任意字段。
 
 ```yaml
 CompileFlags:
-  CompilationDatabase: build/debug
+  CompilationDatabase: build
   Compiler: g++
   Add:
     - -std=c++20
@@ -123,7 +180,7 @@ MSVC 输出示例：
 
 ```yaml
 CompileFlags:
-  CompilationDatabase: build/debug
+  CompilationDatabase: build
   Compiler: clang-cl
   Add:
     - /std:c++20
@@ -158,7 +215,7 @@ Linux/macOS shell 包装示例：
 {
   "label": "C++: Build",
   "command": "sh",
-  "args": ["-lc", "cmake --build build/debug"],
+  "args": ["-lc", "cmake --build build"],
   "cwd": "$ZED_WORKTREE_ROOT"
 }
 ```
@@ -169,7 +226,7 @@ Windows shell 包装示例：
 {
   "label": "C++: Build",
   "command": "powershell",
-  "args": ["-NoProfile", "-Command", "cmake --build build/debug"],
+  "args": ["-NoProfile", "-Command", "cmake --build build"],
   "cwd": "$ZED_WORKTREE_ROOT"
 }
 ```
