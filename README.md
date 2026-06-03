@@ -155,7 +155,7 @@ query_driver = ["gcc", "g++"]
 ```json
 {
   "lsp": {
-    "msvc-cmake-neocmake": {
+    "cpp-toolkit-neocmake": {
       "format": { "enable": false },
       "lint": { "enable": true }
     }

@@ -39,6 +39,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
+name = "cpp-toolkit"
+version = "0.5.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "toml",
+ "zed_extension_api",
+]
+
+[[package]]
 name = "crc32fast"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -796,16 +806,6 @@ dependencies = [
  "quote",
  "syn",
  "synstructure",
-]
-
-[[package]]
-name = "zed-msvc-toolkit"
-version = "0.5.1"
-dependencies = [
- "serde",
- "serde_json",
- "toml",
- "zed_extension_api",
 ]
 
 [[package]]

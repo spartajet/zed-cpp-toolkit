@@ -1,7 +1,7 @@
 //! neocmakelsp LSP integration module.
 //!
-//! Provides CMake language support via neocmakelsp, supporting dual installation
-//! (PATH + GitHub download) and dual configuration (.neocmake.toml + settings.json).
+//! Provides CMake language support via neocmakelsp discovered from PATH.
+//! Initialization options are read from Zed settings.json.
 
 pub mod config;
 pub mod download;

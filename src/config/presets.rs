@@ -44,7 +44,7 @@ fn cmake_preset(
             command: Some("clangd".to_string()),
             compiler: Some(clangd_compiler.to_string()),
             compile_commands_dir: Some("{build_dir}".to_string()),
-            query_driver: query_drivers(toolchain_name),
+            query_driver: Some(query_drivers(toolchain_name)),
             ..ClangdConfig::default()
         },
         ..UserConfig::default()
@@ -75,7 +75,7 @@ fn make_preset(
             command: Some("clangd".to_string()),
             compiler: Some(clangd_compiler.to_string()),
             compile_commands_dir: Some(".".to_string()),
-            query_driver: query_drivers(toolchain_name),
+            query_driver: Some(query_drivers(toolchain_name)),
             ..ClangdConfig::default()
         },
         ..UserConfig::default()

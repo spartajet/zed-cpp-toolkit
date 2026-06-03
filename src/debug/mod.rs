@@ -9,7 +9,7 @@
 pub fn log_message(message: &str) {
     #[cfg(target_arch = "wasm32")]
     {
-        eprintln!("[zed-msvc-toolkit] {}", message);
+        eprintln!("[cpp-toolkit] {}", message);
     }
 
     #[cfg(not(target_arch = "wasm32"))]

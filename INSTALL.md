@@ -12,10 +12,10 @@ cargo build --target wasm32-unknown-unknown --release
 构建产物位于：
 
 ```text
-target/wasm32-unknown-unknown/release/zed_msvc_toolkit.wasm
+target/wasm32-unknown-unknown/release/cpp_toolkit.wasm
 ```
 
-> 当前 crate 名称仍是 `zed-msvc-toolkit`，因此 WASM 文件名暂时保留 `zed_msvc_toolkit.wasm`。
+当前 crate 名称为 `cpp-toolkit`，因此 WASM 文件名为 `cpp_toolkit.wasm`。
 
 ## 2. 本地安装
 
@@ -30,7 +30,7 @@ name = "Zed C++ Toolkit"
 
 ```text
 extension.toml
-target/wasm32-unknown-unknown/release/zed_msvc_toolkit.wasm
+target/wasm32-unknown-unknown/release/cpp_toolkit.wasm
 languages/
 ```
 

@@ -31,12 +31,18 @@ pub fn resolve_config(user: Option<UserConfig>) -> ToolkitResult<EffectiveConfig
         .clone()
         .unwrap_or_else(|| "Debug".to_string());
     let build_dir_style = merged.build.build_dir_style.unwrap_or_default();
-    let build_dir = merged
+    let explicit_build_dir = merged
         .build
         .build_dir
         .clone()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| infer_build_dir(build_dir_style, &build_type));
+        .filter(|value| !value.trim().is_empty());
+    if build_dir_style == BuildDirStyle::Custom && explicit_build_dir.is_none() {
+        return Err(ToolkitError::IoMessage(
+            "build_dir_style = \"custom\" requires build_dir".to_string(),
+        ));
+    }
+    let build_dir =
+        explicit_build_dir.unwrap_or_else(|| infer_build_dir(build_dir_style, &build_type));
 
     let toolchain_name = merged
         .toolchain
@@ -98,8 +104,8 @@ pub fn resolve_config(user: Option<UserConfig>) -> ToolkitResult<EffectiveConfig
                 .unwrap_or_else(|| "clangd".to_string()),
             compiler: clangd_compiler,
             compile_commands_dir,
-            extra_flags: merged.clangd.extra_flags,
-            query_driver: merged.clangd.query_driver,
+            extra_flags: merged.clangd.extra_flags.unwrap_or_default(),
+            query_driver: merged.clangd.query_driver.unwrap_or_default(),
         },
     })
 }
@@ -147,12 +153,8 @@ fn merge_clangd(mut base: ClangdConfig, user: ClangdConfig) -> ClangdConfig {
     base.command = user.command.or(base.command);
     base.compiler = user.compiler.or(base.compiler);
     base.compile_commands_dir = user.compile_commands_dir.or(base.compile_commands_dir);
-    if !user.extra_flags.is_empty() {
-        base.extra_flags = user.extra_flags;
-    }
-    if !user.query_driver.is_empty() {
-        base.query_driver = user.query_driver;
-    }
+    base.extra_flags = user.extra_flags.or(base.extra_flags);
+    base.query_driver = user.query_driver.or(base.query_driver);
     base
 }
 
@@ -160,7 +162,7 @@ fn infer_build_dir(style: BuildDirStyle, build_type: &str) -> String {
     match style {
         BuildDirStyle::Build => "build".to_string(),
         BuildDirStyle::Clion => format!("cmake-build-{}", cmake_build_type_suffix(build_type)),
-        BuildDirStyle::Custom => "build".to_string(),
+        BuildDirStyle::Custom => unreachable!("custom build_dir_style is validated earlier"),
     }
 }
 
@@ -241,5 +243,64 @@ mod tests {
 
         assert_eq!(config.build.build_dir, "out/debug");
         assert_eq!(config.clangd.compile_commands_dir, "out/debug");
+    }
+
+    #[test]
+    fn custom_build_dir_style_requires_explicit_build_dir() {
+        let error = resolve_config(Some(UserConfig {
+            preset: Some("custom".to_string()),
+            build: BuildConfig {
+                build_dir_style: Some(BuildDirStyle::Custom),
+                ..BuildConfig::default()
+            },
+            ..UserConfig::default()
+        }))
+        .unwrap_err();
+
+        assert!(
+            error
+                .user_message()
+                .contains("build_dir_style = \"custom\" requires build_dir")
+        );
+    }
+
+    #[test]
+    fn empty_query_driver_overrides_preset_default() {
+        let user = parse_user_config(
+            r#"
+preset = "gcc-cmake-ninja"
+
+[clangd]
+query_driver = []
+"#,
+        )
+        .unwrap();
+
+        let config = resolve_config(Some(user)).unwrap();
+
+        assert!(config.clangd.query_driver.is_empty());
+    }
+
+    #[test]
+    fn empty_extra_flags_overrides_preset_default() {
+        let preset = UserConfig {
+            preset: Some("custom".to_string()),
+            clangd: ClangdConfig {
+                extra_flags: Some(vec!["-std=c++20".to_string()]),
+                ..ClangdConfig::default()
+            },
+            ..UserConfig::default()
+        };
+        let user = UserConfig {
+            clangd: ClangdConfig {
+                extra_flags: Some(Vec::new()),
+                ..ClangdConfig::default()
+            },
+            ..UserConfig::default()
+        };
+
+        let merged = merge_user_config(preset, user);
+
+        assert_eq!(merged.clangd.extra_flags, Some(Vec::new()));
     }
 }

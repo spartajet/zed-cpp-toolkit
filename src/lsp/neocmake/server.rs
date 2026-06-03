@@ -5,7 +5,7 @@ use crate::error::{ToolkitError, ToolkitResult};
 use crate::lsp::neocmake::download::find_binary;
 use zed_extension_api as zed;
 
-pub const LANGUAGE_SERVER_ID: &str = "msvc-cmake-neocmake";
+pub const LANGUAGE_SERVER_ID: &str = "cpp-toolkit-neocmake";
 
 /// Validates neocmake language server ID.
 pub fn validate_language_server_id(id: &str) -> ToolkitResult<()> {
@@ -43,7 +43,7 @@ mod tests {
 
     #[test]
     fn accepts_neocmake_language_server_id() {
-        assert_eq!(validate_language_server_id("msvc-cmake-neocmake"), Ok(()));
+        assert_eq!(validate_language_server_id("cpp-toolkit-neocmake"), Ok(()));
     }
 
     #[test]

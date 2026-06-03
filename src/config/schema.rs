@@ -43,24 +43,17 @@ pub struct ClangdConfig {
     pub command: Option<String>,
     pub compiler: Option<String>,
     pub compile_commands_dir: Option<String>,
-    #[serde(default)]
-    pub extra_flags: Vec<String>,
-    #[serde(default)]
-    pub query_driver: Vec<String>,
+    pub extra_flags: Option<Vec<String>>,
+    pub query_driver: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum BuildDirStyle {
+    #[default]
     Build,
     Clion,
     Custom,
-}
-
-impl Default for BuildDirStyle {
-    fn default() -> Self {
-        Self::Build
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
