@@ -389,7 +389,28 @@ fn write_generated_tasks(
     runner: &impl crate::environment::tools::CommandRunner,
 ) -> ToolkitResult<()> {
     let task_config = crate::toolchain::prepare_task_config(config, runner)?;
-    let contents = generate_cpp_tasks_json(&task_config, shell_for_root_path(root_path))?;
+
+    // Discover cmake executable targets for auto-generated run tasks
+    let cmake_targets = if config.build.system == "cmake" && config.run.command.is_none() {
+        let discovered = discover_cmake_targets_from_build_dir(root_path, &config.build.build_dir, runner);
+        match discovered {
+            Ok(targets) => {
+                log_message(&format!(
+                    "discovered {} cmake executable target(s) for run tasks",
+                    targets.iter().filter(|t| t.executable).count()
+                ));
+                targets
+            }
+            Err(error) => {
+                log_message(&format!("cmake target discovery skipped: {error}"));
+                Vec::new()
+            }
+        }
+    } else {
+        Vec::new()
+    };
+
+    let contents = generate_cpp_tasks_json(&task_config, shell_for_root_path(root_path), &cmake_targets)?;
     log_message(&format!("generated .zed/tasks.json content:\n{contents}"));
     write_tasks_file(root_path, &contents, runner)?;
     log_message("wrote generated .zed/tasks.json to workspace");
@@ -430,7 +451,15 @@ fn discover_cmake_targets(
     root_path: &str,
     runner: &impl crate::environment::tools::CommandRunner,
 ) -> ToolkitResult<Vec<CmakeTarget>> {
-    let build_ninja = join_windows_path(&join_windows_path(root_path, "build"), "build.ninja");
+    discover_cmake_targets_from_build_dir(root_path, "build", runner)
+}
+
+fn discover_cmake_targets_from_build_dir(
+    root_path: &str,
+    build_dir: &str,
+    runner: &impl crate::environment::tools::CommandRunner,
+) -> ToolkitResult<Vec<CmakeTarget>> {
+    let build_ninja = join_windows_path(&join_windows_path(root_path, build_dir), "build.ninja");
     let escaped_path = powershell_single_quote(&build_ninja);
     let script = format!(
         "$ErrorActionPreference='Stop'; if (!(Test-Path -LiteralPath {escaped_path})) {{ return }}; \
@@ -724,6 +753,7 @@ const CPP_TOOLKIT_EXAMPLE_CONFIGS: &[ExampleConfig] = &[
 
 const WINDOWS_EXAMPLE_CONFIG: &str = r#"# Example cpp-toolkit configuration for Windows/MSVC.
 # Copy this file to .zed/cpp-toolkit.toml and edit it for your project.
+# After editing, restart the language server (command palette -> "clangd: Restart") to apply changes.
 
 preset = "msvc-cmake-ninja"
 
@@ -740,9 +770,11 @@ configure = "cmake -S . -B {build_dir} -G Ninja -DCMAKE_BUILD_TYPE={build_type} 
 build = "cmake --build {build_dir}"
 clean = "cmake --build {build_dir} --target clean"
 
-[run]
-command = ".\\build\\app.exe"
-cwd = "$ZED_WORKTREE_ROOT"
+# [run] is optional for cmake projects: executable targets are auto-discovered from build.ninja.
+# Uncomment and edit to override the auto-discovered run command.
+# [run]
+# command = ".\\build\\app.exe"
+# cwd = "$ZED_WORKTREE_ROOT"
 
 [clangd]
 command = "clangd"
@@ -754,6 +786,7 @@ query_driver = []
 
 const LINUX_EXAMPLE_CONFIG: &str = r#"# Example cpp-toolkit configuration for Linux/GCC.
 # Copy this file to .zed/cpp-toolkit.toml and edit it for your project.
+# After editing, restart the language server (command palette -> "clangd: Restart") to apply changes.
 
 preset = "gcc-cmake-ninja"
 
@@ -770,9 +803,11 @@ configure = "cmake -S . -B {build_dir} -G Ninja -DCMAKE_BUILD_TYPE={build_type} 
 build = "cmake --build {build_dir}"
 clean = "cmake --build {build_dir} --target clean"
 
-[run]
-command = "./build/app"
-cwd = "$ZED_WORKTREE_ROOT"
+# [run] is optional for cmake projects: executable targets are auto-discovered from build.ninja.
+# Uncomment and edit to override the auto-discovered run command.
+# [run]
+# command = "./build/app"
+# cwd = "$ZED_WORKTREE_ROOT"
 
 [clangd]
 command = "clangd"
@@ -784,6 +819,7 @@ query_driver = ["gcc", "g++"]
 
 const MACOS_EXAMPLE_CONFIG: &str = r#"# Example cpp-toolkit configuration for macOS/Clang.
 # Copy this file to .zed/cpp-toolkit.toml and edit it for your project.
+# After editing, restart the language server (command palette -> "clangd: Restart") to apply changes.
 
 preset = "clang-cmake-ninja"
 
@@ -800,9 +836,11 @@ configure = "cmake -S . -B {build_dir} -G Ninja -DCMAKE_BUILD_TYPE={build_type} 
 build = "cmake --build {build_dir}"
 clean = "cmake --build {build_dir} --target clean"
 
-[run]
-command = "./build/app"
-cwd = "$ZED_WORKTREE_ROOT"
+# [run] is optional for cmake projects: executable targets are auto-discovered from build.ninja.
+# Uncomment and edit to override the auto-discovered run command.
+# [run]
+# command = "./build/app"
+# cwd = "$ZED_WORKTREE_ROOT"
 
 [clangd]
 command = "clangd"
@@ -1213,6 +1251,12 @@ mod tests {
             CommandOutput {
                 status: Some(0),
                 stdout: "C:\\VS\\2022\\Community\n".to_string(),
+                stderr: String::new(),
+            },
+            // discover_cmake_targets_from_build_dir (powershell - no build.ninja found)
+            CommandOutput {
+                status: Some(0),
+                stdout: String::new(),
                 stderr: String::new(),
             },
             CommandOutput {
