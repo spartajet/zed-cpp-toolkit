@@ -65,7 +65,7 @@ Extension metadata:
 
 ```toml
 id = "cpp-toolkit"
-name = "Zed C++ Toolkit"
+name = "C++ Toolkit"
 ```
 
 > 中文：在 Zed 中安装扩展，或把本仓库作为本地开发扩展加载。手动构建产物是

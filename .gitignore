@@ -1,6 +1,7 @@
 /target
 /.worktrees
 /.publish
+/grammars/cmake
 *.wasm
 superpowers/
 .claude/
