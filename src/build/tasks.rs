@@ -135,9 +135,8 @@ mod tests {
         assert_eq!(parsed[0]["label"], "C++: Configure");
         assert_eq!(parsed[1]["label"], "C++: Build");
         assert_eq!(parsed[2]["label"], "C++: Clean");
-        assert_eq!(parsed[1]["command"], "sh");
-        assert_eq!(parsed[1]["args"][0], "-lc");
-        assert_eq!(parsed[1]["args"][1], "cmake --build build");
+        assert_eq!(parsed[1]["command"], "cmake --build build");
+        assert!(parsed[1]["args"].as_array().unwrap().is_empty());
     }
 
     #[test]
@@ -158,7 +157,7 @@ mod tests {
         assert_eq!(parsed.as_array().unwrap().len(), 5);
         let run_task = task_with_label(&parsed, "C++: Run: myapp");
         assert!(
-            run_task["args"][1]
+            run_task["command"]
                 .as_str()
                 .unwrap()
                 .contains("build/myapp.exe")
@@ -255,7 +254,7 @@ mod tests {
         assert_eq!(run_task_count(&parsed), 1);
         let run_task = task_with_label(&parsed, "C++: Run");
         assert!(
-            run_task["args"][1]
+            run_task["command"]
                 .as_str()
                 .unwrap()
                 .contains("my-custom-app")

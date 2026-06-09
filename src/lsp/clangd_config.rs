@@ -37,7 +37,15 @@ pub fn render_clangd_config(input: &ClangdConfigInput) -> String {
         "  Compiler: {}\n",
         format_yaml_value(&input.compiler)
     ));
-    output.push_str("  Add:\n");
+    output.push_str("  Remove:\n");
+    output.push_str("    - -fdeps-format=*\n");
+    output.push_str("    - -fmodules-ts\n");
+    output.push_str("    - -fmodule-mapper=*\n");
+
+    let has_add_entries = !input.extra_flags.is_empty() || input.msvc_include.is_some();
+    if has_add_entries {
+        output.push_str("  Add:\n");
+    }
 
     for flag in &input.extra_flags {
         output.push_str(&format!("    - {}\n", format_yaml_value(flag)));
@@ -100,6 +108,35 @@ mod tests {
         assert!(rendered.contains("    - -std=c++20"));
         assert!(rendered.contains("    - -Iinclude"));
         assert!(!rendered.contains("Windows SDK include not auto-detected"));
+    }
+
+    #[test]
+    fn omits_add_when_there_are_no_extra_flags_or_includes() {
+        let rendered = render_clangd_config(&ClangdConfigInput {
+            compiler: "g++".to_string(),
+            compile_commands_dir: "cmake-build-debug".to_string(),
+            extra_flags: Vec::new(),
+            msvc_include: None,
+            sdk_includes: Vec::new(),
+        });
+
+        assert!(!rendered.contains("  Add:"));
+        assert!(rendered.contains("Diagnostics:\n  Suppress: ['pp_file_not_found']\n"));
+    }
+
+    #[test]
+    fn removes_gcc_dependency_and_modules_flags_that_clangd_rejects() {
+        let rendered = render_clangd_config(&ClangdConfigInput {
+            compiler: "g++".to_string(),
+            compile_commands_dir: "cmake-build-debug".to_string(),
+            extra_flags: Vec::new(),
+            msvc_include: None,
+            sdk_includes: Vec::new(),
+        });
+
+        assert!(rendered.contains("  Remove:\n    - -fdeps-format=*\n"));
+        assert!(rendered.contains("    - -fmodules-ts\n"));
+        assert!(rendered.contains("    - -fmodule-mapper=*\n"));
     }
 
     #[test]

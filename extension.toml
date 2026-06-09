@@ -1,10 +1,10 @@
 id = "cpp-toolkit"
 name = "Zed C++ Toolkit"
 description = "Cross-platform C/C++ toolkit for Zed with configurable toolchains, build commands, tasks, and clangd support."
-version = "0.6.0"
+version = "1.0.0"
 schema_version = 1
 authors = ["Dr.Guo"]
-repository = "https://github.com/spartajet/zed-msvc-toolkit.git"
+repository = "https://github.com/spartajet/zed-cpp-toolkit.git"
 
 capabilities = [
   { kind = "process:exec", command = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe', args = ["**"] },

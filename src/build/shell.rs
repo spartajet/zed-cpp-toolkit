@@ -35,10 +35,7 @@ pub fn wrap_command(shell: ShellKind, command: &str) -> (String, Vec<String>) {
                 command.to_string(),
             ],
         ),
-        ShellKind::Sh => (
-            "sh".to_string(),
-            vec!["-lc".to_string(), command.to_string()],
-        ),
+        ShellKind::Sh => (command.to_string(), Vec::new()),
     }
 }
 
@@ -56,8 +53,8 @@ mod tests {
     #[test]
     fn wraps_sh_command() {
         let (command, args) = wrap_command(ShellKind::Sh, "cmake --build build");
-        assert_eq!(command, "sh");
-        assert_eq!(args, vec!["-lc", "cmake --build build"]);
+        assert_eq!(command, "cmake --build build");
+        assert!(args.is_empty());
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use crate::build::shell::shell_for_root_path;
+use crate::build::shell::{ShellKind, shell_for_root_path};
 use crate::build::tasks::generate_cpp_tasks_json;
 use crate::cmake::{CmakeTarget, TaskOptions, discover_compile_database, generate_tasks_json};
 use crate::config::loader::load_effective_config;
@@ -465,36 +465,52 @@ fn discover_cmake_targets_from_build_dir(
         return Ok(targets);
     }
 
-    let build_ninja = join_windows_path(&join_windows_path(root_path, build_dir), "build.ninja");
-    let escaped_path = powershell_single_quote(&build_ninja);
-    let script = format!(
-        "$ErrorActionPreference='Stop'; if (!(Test-Path -LiteralPath {escaped_path})) {{ return }}; \
-         $targets = @(); \
-         Get-Content -LiteralPath {escaped_path} | ForEach-Object {{ \
-             if ($_ -match '^build\\s+([^:]+?\\.exe):') {{ \
-                 $output = $Matches[1].Trim(); \
-                 if ($output -notmatch '(^|/)CMakeFiles/') {{ \
-                     $name = [IO.Path]::GetFileNameWithoutExtension($output); \
-                     $targets += \"$name|$output|exe\"; \
-                 }} \
-             }} elseif ($_ -match '^build\\s+([^: ]+): phony') {{ \
-                 $name = $Matches[1].Trim(); \
-                 if ($name -notmatch '(^all$|^clean$|^edit_cache$|^rebuild_cache$|::|_autogen$|_autogen_timestamp_deps$|_automoc_json_extraction$|^cmake_object_order_depends_target_)') {{ \
-                     $targets += \"$name||target\"; \
-                 }} \
-             }} \
-         }}; \
-         $targets | Sort-Object -Unique"
-    );
-    let args = vec!["-NoProfile".to_string(), "-Command".to_string(), script];
-    let output = runner.run_command("powershell", &args)?;
-    let stdout = crate::environment::tools::ensure_success("powershell", output)?;
-    Ok(dedupe_cmake_targets(
-        stdout
+    let Some(build_ninja) = read_cmake_build_ninja(root_path, build_dir, runner)? else {
+        return Ok(Vec::new());
+    };
+    Ok(parse_cmake_targets_from_ninja(&build_ninja))
+}
+
+fn read_cmake_build_ninja(
+    root_path: &str,
+    build_dir: &str,
+    runner: &impl crate::environment::tools::CommandRunner,
+) -> ToolkitResult<Option<String>> {
+    match shell_for_root_path(root_path) {
+        ShellKind::Powershell => {
+            let build_ninja =
+                join_windows_path(&join_windows_path(root_path, build_dir), "build.ninja");
+            let escaped_path = powershell_single_quote(&build_ninja);
+            let script = format!(
+                "$ErrorActionPreference='Stop'; if (Test-Path -LiteralPath {escaped_path}) {{ Get-Content -Raw -LiteralPath {escaped_path} }}"
+            );
+            let args = vec!["-NoProfile".to_string(), "-Command".to_string(), script];
+            let output = runner.run_command("powershell", &args)?;
+            crate::environment::tools::ensure_success("powershell", output)
+                .map(|stdout| (!stdout.is_empty()).then_some(stdout))
+        }
+        ShellKind::Sh => {
+            let build_ninja = join_unix_components(root_path, &[build_dir, "build.ninja"]);
+            let script = format!(
+                "if [ -f {} ]; then cat -- {}; fi",
+                sh_single_quote(&build_ninja),
+                sh_single_quote(&build_ninja)
+            );
+            let args = vec!["-c".to_string(), script];
+            let output = runner.run_command("sh", &args)?;
+            crate::environment::tools::ensure_success("sh", output)
+                .map(|stdout| (!stdout.is_empty()).then_some(stdout))
+        }
+    }
+}
+
+fn parse_cmake_targets_from_ninja(contents: &str) -> Vec<CmakeTarget> {
+    dedupe_cmake_targets(
+        contents
             .lines()
-            .filter_map(parse_cmake_target_line)
+            .filter_map(parse_cmake_ninja_build_line)
             .collect::<Vec<_>>(),
-    ))
+    )
 }
 
 fn discover_cmake_targets_from_file_api(
@@ -648,27 +664,59 @@ fn executable_artifact_path(path: &str) -> bool {
             && !lower.ends_with(".dylib"))
 }
 
-fn parse_cmake_target_line(line: &str) -> Option<CmakeTarget> {
-    let mut parts = line.trim().splitn(3, '|');
-    let name = parts.next()?.trim();
-    let output = parts.next()?.trim();
-    let kind = parts.next()?.trim();
-    let name = name.trim();
-    if name.is_empty() {
+fn parse_cmake_ninja_build_line(line: &str) -> Option<CmakeTarget> {
+    let line = line.trim();
+    let rest = line.strip_prefix("build ")?;
+    let (outputs, rule_and_inputs) = rest.split_once(':')?;
+    let output = primary_ninja_output(outputs)?.trim();
+    if output.is_empty() || output.contains("CMakeFiles/") || output.contains("CMakeFiles\\") {
         return None;
     }
 
-    let output = if output.is_empty() {
-        None
-    } else {
-        Some(output.to_string())
-    };
+    let rule = rule_and_inputs
+        .split_whitespace()
+        .next()
+        .unwrap_or_default();
+    if rule.contains("EXECUTABLE_LINKER") {
+        let name = target_name_from_output(output);
+        if !is_user_buildable_cmake_target_name(&name) {
+            return None;
+        }
+        return Some(CmakeTarget {
+            name,
+            output: Some(output.to_string()),
+            executable: true,
+        });
+    }
 
-    Some(CmakeTarget {
-        name: name.to_string(),
-        output,
-        executable: kind == "exe",
-    })
+    if rule == "phony" {
+        let name = output.trim();
+        if !is_user_buildable_cmake_target_name(name)
+            || matches!(name, "all" | "clean" | "edit_cache" | "rebuild_cache")
+        {
+            return None;
+        }
+        return Some(CmakeTarget {
+            name: name.to_string(),
+            output: None,
+            executable: false,
+        });
+    }
+
+    None
+}
+
+fn primary_ninja_output(outputs: &str) -> Option<&str> {
+    let explicit_outputs = outputs.split('|').next()?.trim();
+    explicit_outputs.split_whitespace().next()
+}
+
+fn target_name_from_output(output: &str) -> String {
+    let file_name = output.rsplit(['/', '\\']).next().unwrap_or(output);
+    file_name
+        .strip_suffix(".exe")
+        .unwrap_or(file_name)
+        .to_string()
 }
 
 fn dedupe_cmake_targets(targets: Vec<CmakeTarget>) -> Vec<CmakeTarget> {
@@ -714,6 +762,8 @@ fn output_path_score(output: Option<&str>) -> usize {
 fn is_user_buildable_cmake_target_name(name: &str) -> bool {
     !name.is_empty()
         && !name.contains("::")
+        && !name.contains('/')
+        && !name.contains('\\')
         && !name.ends_with("_autogen")
         && !name.ends_with("_autogen_timestamp_deps")
         && !name.ends_with("_automoc_json_extraction")
@@ -817,7 +867,7 @@ fn workspace_file_exists(
                 "if [ -e {} ]; then printf true; else printf false; fi",
                 sh_single_quote(&path)
             );
-            let args = vec!["-lc".to_string(), script];
+            let args = vec!["-c".to_string(), script];
             let output = runner.run_command("sh", &args)?;
             crate::environment::tools::ensure_success("sh", output)
                 .map(|stdout| stdout.trim() == "true")
@@ -842,7 +892,7 @@ fn write_workspace_text_file(
         crate::build::shell::ShellKind::Sh => {
             let path = join_unix_components(root_path, components);
             let script = write_sh_text_file_script(&path, contents);
-            let args = vec!["-lc".to_string(), script];
+            let args = vec!["-c".to_string(), script];
             let output = runner.run_command("sh", &args)?;
             crate::environment::tools::ensure_success("sh", output).map(|_| ())
         }
@@ -1231,7 +1281,7 @@ mod tests {
         let calls = runner.calls.borrow();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "sh");
-        assert_eq!(calls[0].1[0], "-lc");
+        assert_eq!(calls[0].1[0], "-c");
         assert!(calls[0].1[1].contains("/home/me/project/.zed/tasks.json"));
         assert!(calls[0].1[1].contains("mkdir -p"));
     }
@@ -1594,6 +1644,34 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn discovers_cmake_executable_targets_from_unix_ninja_build_file() {
+        let runner = QueueRunner::new([CommandOutput {
+            status: Some(0),
+            stdout: "build qt_demo: CXX_EXECUTABLE_LINKER__qt_demo_Debug CMakeFiles/qt_demo.dir/main.cpp.o\nbuild qt_demo: phony qt_demo\nbuild /home/guo/Code/cpp/qt-demo/CMakeLists.txt: phony\n".to_string(),
+            stderr: String::new(),
+        }]);
+
+        let targets =
+            discover_cmake_targets_from_build_dir("/home/me/project", "cmake-build-debug", &runner)
+                .unwrap();
+
+        assert_eq!(
+            targets,
+            vec![CmakeTarget {
+                name: "qt_demo".to_string(),
+                output: Some("qt_demo".to_string()),
+                executable: true,
+            }]
+        );
+
+        let calls = runner.calls.borrow();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "sh");
+        assert_eq!(calls[0].1[0], "-c");
+        assert!(calls[0].1[1].contains("/home/me/project/cmake-build-debug/build.ninja"));
     }
 
     #[test]
