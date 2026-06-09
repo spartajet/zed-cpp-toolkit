@@ -158,7 +158,7 @@ mod tests {
     fn handles_non_utf8_path_gracefully() {
         // Test graceful degradation for non-UTF-8 paths
         // Create a string from bytes to simulate non-UTF-8 paths
-        let invalid_bytes = [0xFF, 0xFE, 0xFD];
+        let invalid_bytes = vec![0xFF, 0xFE, 0xFD];
         let invalid_path = std::str::from_utf8(&invalid_bytes);
         // Non-UTF-8 paths cannot be converted to &str, this is a compile-time guarantee
         // In real scenarios, paths come from API calls; if conversion to str fails, it degrades

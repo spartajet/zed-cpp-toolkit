@@ -1,26 +1,25 @@
-id = "msvc-cpp-toolkit"
-name = "Zed MSVC C++ Assistant"
-description = "MSVC and clangd assistant for Windows C++ CMake projects in Zed."
-version = "0.5.1"
+id = "cpp-toolkit"
+name = "Zed C++ Toolkit"
+description = "Cross-platform C/C++ toolkit for Zed with configurable toolchains, build commands, tasks, and clangd support."
+version = "1.0.0"
 schema_version = 1
 authors = ["Dr.Guo"]
-repository = "https://github.com/spartajet/zed-msvc-toolkit.git"
+repository = "https://github.com/spartajet/zed-cpp-toolkit.git"
 
 capabilities = [
-  { kind = "process:exec", command = "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\vswhere.exe", args = [
-    "**"
-  ] },
+  { kind = "process:exec", command = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe', args = ["**"] },
   { kind = "process:exec", command = "powershell", args = ["**"] },
+  { kind = "process:exec", command = "sh", args = ["**"] },
   { kind = "process:exec", command = "cmake", args = ["**"] },
 ]
 
 languages = ["languages/cmake"]
 
-[language_servers.msvc-cpp-clangd]
-name = "MSVC clangd"
+[language_servers.cpp-toolkit-clangd]
+name = "clangd"
 languages = ["C", "C++"]
 
-[language_servers.msvc-cmake-neocmake]
+[language_servers.cpp-toolkit-neocmake]
 name = "neocmakelsp"
 languages = ["CMake"]
 
@@ -28,5 +27,5 @@ languages = ["CMake"]
 repository = "https://github.com/uyha/tree-sitter-cmake"
 commit = "cf9799600b2ba5e6620fdabddec3b2db8306bc46"
 
-# V0.4: CMake tasks provided via .zed/tasks.json
-# Users can run CMake configure and build commands in task panel (Ctrl+Shift+T)
+# CMake tasks are provided via .zed/tasks.json.
+# Users can run generated C++ configure/build/run tasks in Zed's task panel.

@@ -1,18 +1,21 @@
 use zed_extension_api as zed;
 
+mod build;
 // CMake integration module (reserved feature, currently only used by clangd LSP)
 #[allow(unused_imports)]
 mod cmake;
+mod config;
 mod debug;
 mod environment;
 mod error;
 mod lsp;
 mod paths;
+mod toolchain;
 
 #[derive(Default)]
-struct MsvcToolkitExtension;
+struct CppToolkitExtension;
 
-impl zed::Extension for MsvcToolkitExtension {
+impl zed::Extension for CppToolkitExtension {
     fn new() -> Self {
         debug::log_message("extension instance created");
 
@@ -51,20 +54,12 @@ impl zed::Extension for MsvcToolkitExtension {
 
         // Route to the appropriate LSP based on ID
         let result = match language_server_id {
-            "msvc-cpp-clangd" => {
-                if let Err(error_msg) =
-                    validate_and_prepare_clangd(worktree, language_server_id_value)
-                {
-                    return Err(error_msg);
-                }
+            "cpp-toolkit-clangd" => {
+                validate_and_prepare_clangd(worktree, language_server_id_value)?;
                 lsp::server::command_from_worktree(worktree).map_err(|e| e.user_message())
             }
-            "msvc-cmake-neocmake" => {
-                if let Err(error_msg) =
-                    validate_and_prepare_neocmake(worktree, language_server_id_value)
-                {
-                    return Err(error_msg);
-                }
+            "cpp-toolkit-neocmake" => {
+                validate_and_prepare_neocmake(worktree, language_server_id_value)?;
                 lsp::neocmake::server::command_from_worktree(worktree, language_server_id_value)
                     .map_err(|e| e.user_message())
             }
@@ -110,7 +105,7 @@ impl zed::Extension for MsvcToolkitExtension {
         worktree: &zed::Worktree,
     ) -> zed::Result<Option<serde_json::Value>> {
         match language_server_id.as_ref() {
-            "msvc-cmake-neocmake" => {
+            "cpp-toolkit-neocmake" => {
                 let config = lsp::neocmake::config::load_config(worktree);
                 let options = lsp::neocmake::init_options::build_init_options(&config);
                 debug::log_message(&format!("neocmakelsp init options: {options}"));
@@ -132,7 +127,7 @@ fn validate_and_prepare_clangd(
     worktree: &zed::Worktree,
     language_server_id: &zed::LanguageServerId,
 ) -> Result<(), String> {
-    if let Err(error) = lsp::server::validate_language_server_id("msvc-cpp-clangd") {
+    if let Err(error) = lsp::server::validate_language_server_id("cpp-toolkit-clangd") {
         debug::log_error("language server id validation failed", &error);
         set_lsp_status(
             language_server_id,
@@ -167,7 +162,7 @@ fn validate_and_prepare_neocmake(
     _worktree: &zed::Worktree,
     language_server_id: &zed::LanguageServerId,
 ) -> Result<(), String> {
-    if let Err(error) = lsp::neocmake::server::validate_language_server_id("msvc-cmake-neocmake") {
+    if let Err(error) = lsp::neocmake::server::validate_language_server_id("cpp-toolkit-neocmake") {
         debug::log_error("neocmake language server id validation failed", &error);
         set_lsp_status(
             language_server_id,
@@ -184,4 +179,13 @@ fn validate_and_prepare_neocmake(
     Ok(())
 }
 
-zed::register_extension!(MsvcToolkitExtension);
+zed::register_extension!(CppToolkitExtension);
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn extension_manifest_is_valid_toml() {
+        let manifest = include_str!("../extension.toml");
+        let _: toml::Value = toml::from_str(manifest).unwrap();
+    }
+}

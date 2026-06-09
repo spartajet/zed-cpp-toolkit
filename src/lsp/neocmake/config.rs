@@ -62,22 +62,22 @@ fn config_from_settings_json(settings: Option<&str>) -> NeocmakeConfig {
         return config;
     };
 
-    let Some(Value::Object(neocmake_obj)) = lsp_obj.get("msvc-cmake-neocmake") else {
+    let Some(Value::Object(neocmake_obj)) = lsp_obj.get("cpp-toolkit-neocmake") else {
         log_final_config(&config);
         return config;
     };
 
-    if let Some(Value::Object(format_obj)) = neocmake_obj.get("format") {
-        if let Some(Value::Bool(enable)) = format_obj.get("enable") {
-            config.format.enable = *enable;
-            log_message(&format!("settings.json override: format.enable = {enable}"));
-        }
+    if let Some(Value::Object(format_obj)) = neocmake_obj.get("format")
+        && let Some(Value::Bool(enable)) = format_obj.get("enable")
+    {
+        config.format.enable = *enable;
+        log_message(&format!("settings.json override: format.enable = {enable}"));
     }
-    if let Some(Value::Object(lint_obj)) = neocmake_obj.get("lint") {
-        if let Some(Value::Bool(enable)) = lint_obj.get("enable") {
-            config.lint.enable = *enable;
-            log_message(&format!("settings.json override: lint.enable = {enable}"));
-        }
+    if let Some(Value::Object(lint_obj)) = neocmake_obj.get("lint")
+        && let Some(Value::Bool(enable)) = lint_obj.get("enable")
+    {
+        config.lint.enable = *enable;
+        log_message(&format!("settings.json override: lint.enable = {enable}"));
     }
     if let Some(Value::Bool(scan)) = neocmake_obj.get("scan_cmake_in_package") {
         config.scan_cmake_in_package = *scan;
@@ -112,7 +112,7 @@ mod tests {
     fn settings_json_overrides_default_init_options() {
         let settings = r#"{
             "lsp": {
-                "msvc-cmake-neocmake": {
+                "cpp-toolkit-neocmake": {
                     "format": { "enable": false },
                     "lint": { "enable": true },
                     "scan_cmake_in_package": false,
