@@ -36,14 +36,13 @@ preset = "gcc-cmake-ninja"
 build_type = "Debug"
 build_dir = "build"
 
-[run]
-command = "./build/app"
-
 [clangd]
 extra_flags = ["-std=c++20"]
 ```
 
-打开 C/C++ 文件后，扩展会解析配置、合并 preset、生成或刷新自动生成的 `.clangd`、生成 `.zed/tasks.json`，并启动 `cpp-toolkit-clangd`。
+打开 C/C++ 文件后，扩展会解析配置、合并 preset、生成 `.clangd` 和 `.zed/tasks.json`，并启动 `cpp-toolkit-clangd`。
+
+> **修改配置后**，在命令面板中执行 `clangd: Restart` 以重新加载。
 
 ## 配置示例
 
@@ -57,6 +56,12 @@ build_type = "Release"
 configure = "cmake -S . -B {build_dir} -G Ninja -DCMAKE_BUILD_TYPE={build_type} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
 build = "cmake --build {build_dir}"
 clean = "cmake --build {build_dir} --target clean"
+
+# Run tasks are auto-discovered from build.ninja for cmake projects.
+# Build target tasks are auto-discovered from CMake file-api/build.ninja.
+# Uncomment to override:
+# [run]
+# command = "./build/my-app"
 
 [clangd]
 compiler = "clang++"
@@ -145,8 +150,33 @@ query_driver = ["gcc", "g++"]
 
 - `C++: Configure`
 - `C++: Build`
+- `C++: Build Target: <target>`
 - `C++: Clean`
-- `C++: Run`
+- `C++: Run` 或 `C++: Run: <target>`
+
+### CMake Target 任务
+
+CMake 项目会自动发现 target：
+
+1. **Build Target**：扩展优先解析 CMake file-api reply，回退解析 `build.ninja`，为发现到的可构建 target 生成 `C++: Build Target: <target>`。这包括顶层库、`add_subdirectory` 中的 demo/test 可执行目标，以及普通库目标。需要先至少执行一次 Configure 生成 CMake 构建目录。
+
+2. **Run Target**：在 `[run]` 未配置时，扩展会为可执行 target 生成 `C++: Run: <target>`。库目标只生成 build task，不生成 run task。
+
+### Run 任务
+
+Run 任务有两种来源：
+
+1. **自动发现（推荐）**：cmake 项目在 `[run]` 未配置时，扩展会自动发现可执行 target，为每个 exe 生成 `C++: Run: <target>` 任务。
+
+2. **手动配置**：在任何 preset 中显式设置 `[run]` 段：
+
+```toml
+[run]
+command = "./build/my-app"
+cwd = "$ZED_WORKTREE_ROOT"
+```
+
+手动配置优先级高于自动发现。
 
 ## CMake 语言支持
 

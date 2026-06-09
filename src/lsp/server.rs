@@ -390,14 +390,15 @@ fn write_generated_tasks(
 ) -> ToolkitResult<()> {
     let task_config = crate::toolchain::prepare_task_config(config, runner)?;
 
-    // Discover cmake executable targets for auto-generated run tasks
-    let cmake_targets = if config.build.system == "cmake" && config.run.command.is_none() {
-        let discovered = discover_cmake_targets_from_build_dir(root_path, &config.build.build_dir, runner);
+    let cmake_targets = if config.build.system == "cmake" {
+        let discovered =
+            discover_cmake_targets_from_build_dir(root_path, &config.build.build_dir, runner);
         match discovered {
             Ok(targets) => {
                 log_message(&format!(
-                    "discovered {} cmake executable target(s) for run tasks",
-                    targets.iter().filter(|t| t.executable).count()
+                    "discovered {} cmake target(s), {} executable target(s)",
+                    targets.len(),
+                    targets.iter().filter(|target| target.executable).count()
                 ));
                 targets
             }
@@ -410,7 +411,8 @@ fn write_generated_tasks(
         Vec::new()
     };
 
-    let contents = generate_cpp_tasks_json(&task_config, shell_for_root_path(root_path), &cmake_targets)?;
+    let contents =
+        generate_cpp_tasks_json(&task_config, shell_for_root_path(root_path), &cmake_targets)?;
     log_message(&format!("generated .zed/tasks.json content:\n{contents}"));
     write_tasks_file(root_path, &contents, runner)?;
     log_message("wrote generated .zed/tasks.json to workspace");
@@ -459,6 +461,10 @@ fn discover_cmake_targets_from_build_dir(
     build_dir: &str,
     runner: &impl crate::environment::tools::CommandRunner,
 ) -> ToolkitResult<Vec<CmakeTarget>> {
+    if let Some(targets) = discover_cmake_targets_from_file_api(root_path, build_dir)? {
+        return Ok(targets);
+    }
+
     let build_ninja = join_windows_path(&join_windows_path(root_path, build_dir), "build.ninja");
     let escaped_path = powershell_single_quote(&build_ninja);
     let script = format!(
@@ -473,7 +479,7 @@ fn discover_cmake_targets_from_build_dir(
                  }} \
              }} elseif ($_ -match '^build\\s+([^: ]+): phony') {{ \
                  $name = $Matches[1].Trim(); \
-                 if ($name -notmatch '(^all$|^clean$|^edit_cache$|^rebuild_cache$|_autogen$|_autogen_timestamp_deps$|_automoc_json_extraction$|^cmake_object_order_depends_target_)') {{ \
+                 if ($name -notmatch '(^all$|^clean$|^edit_cache$|^rebuild_cache$|::|_autogen$|_autogen_timestamp_deps$|_automoc_json_extraction$|^cmake_object_order_depends_target_)') {{ \
                      $targets += \"$name||target\"; \
                  }} \
              }} \
@@ -489,6 +495,157 @@ fn discover_cmake_targets_from_build_dir(
             .filter_map(parse_cmake_target_line)
             .collect::<Vec<_>>(),
     ))
+}
+
+fn discover_cmake_targets_from_file_api(
+    root_path: &str,
+    build_dir: &str,
+) -> ToolkitResult<Option<Vec<CmakeTarget>>> {
+    let reply_dir = std::path::Path::new(root_path)
+        .join(build_dir)
+        .join(".cmake")
+        .join("api")
+        .join("v1")
+        .join("reply");
+    if !reply_dir.is_dir() {
+        return Ok(None);
+    }
+
+    let Some(index_path) = latest_cmake_file_api_index(&reply_dir)? else {
+        return Ok(None);
+    };
+    let index = read_json_file(&index_path)?;
+    let Some(codemodel_file) = cmake_codemodel_file_name(&index) else {
+        return Ok(None);
+    };
+    let codemodel = read_json_file(&reply_dir.join(codemodel_file))?;
+    let mut targets = Vec::new();
+    let configurations = codemodel
+        .get("configurations")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten();
+
+    for configuration in configurations {
+        let Some(model_targets) = configuration
+            .get("targets")
+            .and_then(serde_json::Value::as_array)
+        else {
+            continue;
+        };
+        for model_target in model_targets {
+            let Some(json_file) = model_target
+                .get("jsonFile")
+                .and_then(serde_json::Value::as_str)
+            else {
+                continue;
+            };
+            let target = read_json_file(&reply_dir.join(json_file))?;
+            if let Some(target) = cmake_target_from_file_api_json(&target) {
+                targets.push(target);
+            }
+        }
+    }
+
+    Ok(Some(dedupe_cmake_targets(targets)))
+}
+
+fn latest_cmake_file_api_index(
+    reply_dir: &std::path::Path,
+) -> ToolkitResult<Option<std::path::PathBuf>> {
+    let mut indexes = std::fs::read_dir(reply_dir)
+        .map_err(|error| ToolkitError::IoMessage(error.to_string()))?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.file_name()
+                .and_then(std::ffi::OsStr::to_str)
+                .is_some_and(|name| name.starts_with("index-") && name.ends_with(".json"))
+        })
+        .collect::<Vec<_>>();
+    indexes.sort();
+    Ok(indexes.pop())
+}
+
+fn read_json_file(path: &std::path::Path) -> ToolkitResult<serde_json::Value> {
+    let contents = std::fs::read_to_string(path)
+        .map_err(|error| ToolkitError::IoMessage(error.to_string()))?;
+    serde_json::from_str(&contents).map_err(|error| ToolkitError::IoMessage(error.to_string()))
+}
+
+fn cmake_codemodel_file_name(index: &serde_json::Value) -> Option<&str> {
+    index
+        .get("reply")
+        .and_then(|reply| reply.get("codemodel-v2"))
+        .and_then(|codemodel| codemodel.get("jsonFile"))
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| {
+            index
+                .get("objects")
+                .and_then(serde_json::Value::as_array)?
+                .iter()
+                .find(|object| {
+                    object.get("kind").and_then(serde_json::Value::as_str) == Some("codemodel")
+                })?
+                .get("jsonFile")
+                .and_then(serde_json::Value::as_str)
+        })
+}
+
+fn cmake_target_from_file_api_json(target: &serde_json::Value) -> Option<CmakeTarget> {
+    if target
+        .get("imported")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    let name = target.get("name")?.as_str()?.trim();
+    if !is_user_buildable_cmake_target_name(name) {
+        return None;
+    }
+
+    let target_type = target.get("type")?.as_str()?;
+    let executable = match target_type {
+        "EXECUTABLE" => true,
+        "STATIC_LIBRARY" | "SHARED_LIBRARY" | "MODULE_LIBRARY" | "OBJECT_LIBRARY" => false,
+        _ => return None,
+    };
+    let output = file_api_primary_artifact(target, executable);
+
+    Some(CmakeTarget {
+        name: name.to_string(),
+        output,
+        executable,
+    })
+}
+
+fn file_api_primary_artifact(target: &serde_json::Value, executable: bool) -> Option<String> {
+    let artifacts = target.get("artifacts")?.as_array()?;
+    artifacts
+        .iter()
+        .filter_map(|artifact| artifact.get("path").and_then(serde_json::Value::as_str))
+        .find(|path| !executable || executable_artifact_path(path))
+        .or_else(|| {
+            artifacts
+                .iter()
+                .filter_map(|artifact| artifact.get("path").and_then(serde_json::Value::as_str))
+                .next()
+        })
+        .map(ToOwned::to_owned)
+}
+
+fn executable_artifact_path(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    lower.ends_with(".exe")
+        || (!lower.ends_with(".pdb")
+            && !lower.ends_with(".ilk")
+            && !lower.ends_with(".dll")
+            && !lower.ends_with(".lib")
+            && !lower.ends_with(".a")
+            && !lower.ends_with(".so")
+            && !lower.ends_with(".dylib"))
 }
 
 fn parse_cmake_target_line(line: &str) -> Option<CmakeTarget> {
@@ -520,7 +677,7 @@ fn dedupe_cmake_targets(targets: Vec<CmakeTarget>) -> Vec<CmakeTarget> {
         by_name
             .entry(target.name.clone())
             .and_modify(|existing| {
-                if target.executable && !existing.executable {
+                if should_replace_cmake_target(existing, &target) {
                     *existing = target.clone();
                 }
             })
@@ -530,6 +687,37 @@ fn dedupe_cmake_targets(targets: Vec<CmakeTarget>) -> Vec<CmakeTarget> {
     let mut targets = by_name.into_values().collect::<Vec<_>>();
     targets.sort_by(|left, right| left.name.cmp(&right.name));
     targets
+}
+
+fn should_replace_cmake_target(existing: &CmakeTarget, candidate: &CmakeTarget) -> bool {
+    if candidate.executable && !existing.executable {
+        return true;
+    }
+
+    if candidate.executable == existing.executable {
+        return output_path_score(candidate.output.as_deref())
+            > output_path_score(existing.output.as_deref());
+    }
+
+    false
+}
+
+fn output_path_score(output: Option<&str>) -> usize {
+    let Some(output) = output else {
+        return 0;
+    };
+
+    let has_directory = output.contains('/') || output.contains('\\');
+    1 + usize::from(has_directory)
+}
+
+fn is_user_buildable_cmake_target_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.contains("::")
+        && !name.ends_with("_autogen")
+        && !name.ends_with("_autogen_timestamp_deps")
+        && !name.ends_with("_automoc_json_extraction")
+        && !name.starts_with("cmake_object_order_depends_target_")
 }
 
 fn first_autogen_target(
@@ -1273,6 +1461,164 @@ mod tests {
             args.iter()
                 .any(|arg| arg.contains("VsDevCmd.bat") && arg.contains("cmake --build build"))
         }));
+    }
+
+    #[test]
+    fn discovers_cmake_targets_from_file_api_codemodel() {
+        use std::fs;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let test_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let temp_dir = std::env::temp_dir().join(format!(
+            "zed-msvc-cmake-file-api-{}-{}",
+            std::process::id(),
+            test_id
+        ));
+        let reply_dir = temp_dir
+            .join("build")
+            .join(".cmake")
+            .join("api")
+            .join("v1")
+            .join("reply");
+        fs::create_dir_all(&reply_dir).unwrap();
+        fs::write(
+            reply_dir.join("index-2026-06-08T15-43-28-0570.json"),
+            r#"{
+              "reply": {
+                "codemodel-v2": {
+                  "jsonFile": "codemodel-v2-test.json"
+                }
+              }
+            }"#,
+        )
+        .unwrap();
+        fs::write(
+            reply_dir.join("codemodel-v2-test.json"),
+            r#"{
+              "configurations": [
+                {
+                  "targets": [
+                    {
+                      "name": "QEnhancedCustomPlot",
+                      "jsonFile": "target-lib.json"
+                    },
+                    {
+                      "name": "demo_realtime",
+                      "jsonFile": "target-demo.json"
+                    },
+                    {
+                      "name": "demo_realtime_autogen",
+                      "jsonFile": "target-autogen.json"
+                    },
+                    {
+                      "name": "Qt6::Core",
+                      "jsonFile": "target-imported.json"
+                    }
+                  ]
+                }
+              ]
+            }"#,
+        )
+        .unwrap();
+        fs::write(
+            reply_dir.join("target-lib.json"),
+            r#"{
+              "name": "QEnhancedCustomPlot",
+              "type": "STATIC_LIBRARY",
+              "artifacts": [
+                { "path": "QEnhancedCustomPlot.lib" }
+              ]
+            }"#,
+        )
+        .unwrap();
+        fs::write(
+            reply_dir.join("target-demo.json"),
+            r#"{
+              "name": "demo_realtime",
+              "type": "EXECUTABLE",
+              "artifacts": [
+                { "path": "demos/demo_realtime/demo_realtime.exe" },
+                { "path": "demos/demo_realtime/demo_realtime.pdb" }
+              ]
+            }"#,
+        )
+        .unwrap();
+        fs::write(
+            reply_dir.join("target-autogen.json"),
+            r#"{
+              "name": "demo_realtime_autogen",
+              "type": "UTILITY"
+            }"#,
+        )
+        .unwrap();
+        fs::write(
+            reply_dir.join("target-imported.json"),
+            r#"{
+              "name": "Qt6::Core",
+              "type": "SHARED_LIBRARY",
+              "imported": true,
+              "artifacts": [
+                { "path": "C:/Qt/bin/Qt6Cored.dll" }
+              ]
+            }"#,
+        )
+        .unwrap();
+
+        let runner = QueueRunner::new([CommandOutput {
+            status: Some(0),
+            stdout: String::new(),
+            stderr: String::new(),
+        }]);
+        let targets = discover_cmake_targets_from_build_dir(
+            temp_dir.to_str().expect("temp path should be valid UTF-8"),
+            "build",
+            &runner,
+        )
+        .unwrap();
+
+        assert_eq!(
+            targets,
+            vec![
+                CmakeTarget {
+                    name: "QEnhancedCustomPlot".to_string(),
+                    output: Some("QEnhancedCustomPlot.lib".to_string()),
+                    executable: false,
+                },
+                CmakeTarget {
+                    name: "demo_realtime".to_string(),
+                    output: Some("demos/demo_realtime/demo_realtime.exe".to_string()),
+                    executable: true,
+                },
+            ]
+        );
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn ninja_target_dedupe_prefers_executable_with_directory_path() {
+        let targets = dedupe_cmake_targets(vec![
+            CmakeTarget {
+                name: "demo_playback".to_string(),
+                output: Some("demo_playback.exe".to_string()),
+                executable: true,
+            },
+            CmakeTarget {
+                name: "demo_playback".to_string(),
+                output: Some("demos/demo_playback/demo_playback.exe".to_string()),
+                executable: true,
+            },
+        ]);
+
+        assert_eq!(
+            targets,
+            vec![CmakeTarget {
+                name: "demo_playback".to_string(),
+                output: Some("demos/demo_playback/demo_playback.exe".to_string()),
+                executable: true,
+            }]
+        );
     }
 
     #[test]
