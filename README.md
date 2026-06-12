@@ -1,13 +1,23 @@
 # Zed C++ Toolkit
 
-`cpp-toolkit` is a cross-platform C/C++ extension for Zed. It uses a project-local
+`cpp-toolkit` is a personal Zed C/C++ extension focused on configurable CMake,
+Makefile, task-generation, and `clangd` workflows. It uses a project-local
 `.zed/cpp-toolkit.toml` file to describe toolchains, build commands, run commands,
 generated Zed tasks, and `clangd` behavior for Windows/MSVC, Linux/WSL, macOS,
 CMake/Ninja, and Makefile projects.
 
-> 中文：`cpp-toolkit` 是一个面向 Zed 的跨平台 C/C++ 扩展。项目通过
+This repository is maintained as a personal extension. It is not published in the
+official Zed extension registry. The original registry submission was closed because
+this extension intentionally executes project-local build/tooling commands and
+writes workspace files such as `.clangd` and `.zed/tasks.json`, which does not fit
+Zed's official extension publishing prerequisites. Use it as a local development
+extension if that behavior is acceptable for your projects.
+
+> 中文：`cpp-toolkit` 是一个个人维护的 Zed C/C++ 扩展。项目通过
 > `.zed/cpp-toolkit.toml` 配置 toolchain、构建命令、运行命令、Zed task 和
 > `clangd` 行为，支持 Windows/MSVC、Linux/WSL、macOS、CMake/Ninja 和 Makefile 项目。
+> 本仓库不再作为官方 Zed marketplace 扩展提交；它会执行本地工具命令并写入 workspace
+> 文件，适合作为个人/本地开发扩展使用。
 
 ## Features
 
@@ -29,6 +39,27 @@ CMake/Ninja, and Makefile projects.
 > 自动发现 CMake target、只为可执行 target 生成 Run 任务，并继续支持 Windows/MSVC 与
 > `neocmakelsp`。
 
+## Safety Model
+
+This extension is designed for personal use, not for the official Zed extension
+registry security model.
+
+It may:
+
+- Run configured build and discovery commands through `cmake`, `powershell`, or `sh`.
+- Read CMake build metadata such as `build.ninja` and CMake file-api replies.
+- Write or refresh generated workspace files:
+  - `.clangd`
+  - `.zed/tasks.json`
+  - `.zed/cpp-toolkit.*.example.toml`
+
+Review `.zed/cpp-toolkit.toml` before opening an untrusted project with this
+extension enabled. Do not use it on repositories where automatic task generation or
+workspace file writes are not acceptable.
+
+> 中文：这个扩展会执行本地构建/发现命令，也会写入 `.clangd`、`.zed/tasks.json` 和示例配置。
+> 只建议在你信任的项目中启用。
+
 ## Requirements
 
 - Zed.
@@ -47,8 +78,13 @@ CMake/Ninja, and Makefile projects.
 
 ## Installation
 
-Install this extension in Zed, or load this repository as a local development
-extension. For local development and manual verification, build the WASM artifact:
+Use this repository as a local Zed development extension.
+
+1. Clone this repository.
+2. Build the extension.
+3. In Zed, install/load it as a development extension from the repository root.
+
+Build command:
 
 ```bash
 rustup target add wasm32-unknown-unknown
@@ -68,7 +104,7 @@ id = "cpp-toolkit"
 name = "C++ Toolkit"
 ```
 
-> 中文：在 Zed 中安装扩展，或把本仓库作为本地开发扩展加载。手动构建产物是
+> 中文：本仓库作为 Zed 本地开发扩展使用，不再走官方扩展市场发布。构建产物是
 > `target/wasm32-unknown-unknown/release/cpp_toolkit.wasm`。
 
 ## Quick Start
@@ -428,27 +464,27 @@ set `[run].command` manually.
 ### Unexpected `C++: Build Target: /path/to/CMakeLists.txt`
 
 Older versions could treat path-like phony outputs in `build.ninja` as targets.
-Version 1.0.0 filters phony targets containing `/` or `\`. Re-run Configure and
+Current versions filter phony targets containing `/` or `\`. Re-run Configure and
 restart `cpp-toolkit-clangd` to refresh tasks.
 
-> 中文：旧版本可能把路径型 phony 输出识别成 target。1.0.0 会过滤这类 target。
+> 中文：旧版本可能把路径型 phony 输出识别成 target。当前版本会过滤这类 target。
 
 ### `.clangd` Warns `Expected scalar or list of scalars`
 
-Older versions could generate an empty `CompileFlags.Add:` node. Version 1.0.0 omits
+Older versions could generate an empty `CompileFlags.Add:` node. Current versions omit
 `Add` when there are no extra flags or include paths. Delete the old generated
 `.clangd` or restart `cpp-toolkit-clangd` so the extension can refresh it.
 
-> 中文：旧版本可能生成空 `Add:`。1.0.0 没有额外 flags/includes 时不会写空 `Add`。
+> 中文：旧版本可能生成空 `Add:`。当前版本没有额外 flags/includes 时不会写空 `Add`。
 
 ### clangd Reports `Unknown argument: '-fdeps-format=p1689r5'`
 
 clangd reads compiler arguments from `compile_commands.json`, but the active clangd
-driver may not understand some GCC/CMake flags. Version 1.0.0 writes
+driver may not understand some GCC/CMake flags. Current versions write
 `CompileFlags.Remove` for `-fdeps-format=*`, `-fmodules-ts`, and
 `-fmodule-mapper=*`.
 
-> 中文：这是 clangd 不认识编译数据库里的某些参数。1.0.0 会通过 `.clangd` 的
+> 中文：这是 clangd 不认识编译数据库里的某些参数。当前版本会通过 `.clangd` 的
 > `CompileFlags.Remove` 过滤这些参数。
 
 ### Zed Stays at `indexing(0%)`
@@ -487,7 +523,7 @@ cargo check
 cargo build --target wasm32-unknown-unknown --release
 ```
 
-Release checklist:
+Personal release checklist:
 
 - `extension.toml` version is updated.
 - `Cargo.toml` version is updated.
@@ -495,7 +531,11 @@ Release checklist:
   troubleshooting.
 - The `vX.Y.Z` tag points at the release commit on `master`.
 
+This project is no longer submitted to `zed-industries/extensions`. Releases are
+personal repository tags only.
+
 > 中文：发布前检查版本号、README、测试、wasm release 构建，并确认 tag 指向 master 上的发布提交。
+> 本项目不再提交到 `zed-industries/extensions`，只作为个人仓库 tag 发布。
 
 ## License
 
