@@ -4,6 +4,32 @@ use crate::config::schema::EffectiveConfig;
 use crate::error::{ToolkitError, ToolkitResult};
 use serde_json::json;
 
+const TASK_PROFILES: [TaskProfile; 2] = [
+    TaskProfile {
+        build_type: "Debug",
+        suffix: "debug",
+    },
+    TaskProfile {
+        build_type: "Release",
+        suffix: "release",
+    },
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TaskProfile {
+    build_type: &'static str,
+    suffix: &'static str,
+}
+
+struct ProfiledBuild {
+    build_dir: String,
+    build_type: &'static str,
+    configure: Option<String>,
+    build: Option<String>,
+    clean: Option<String>,
+    run: Option<String>,
+}
+
 pub fn generate_cpp_tasks_json(
     config: &EffectiveConfig,
     shell: ShellKind,
@@ -11,44 +37,67 @@ pub fn generate_cpp_tasks_json(
 ) -> ToolkitResult<String> {
     let mut tasks = Vec::new();
 
-    if let Some(command) = &config.build.configure {
-        tasks.push(task("C++: Configure", command, "$ZED_WORKTREE_ROOT", shell));
-    }
-    if let Some(command) = &config.build.build {
-        tasks.push(task("C++: Build", command, "$ZED_WORKTREE_ROOT", shell));
-    }
-    if let Some(command) = &config.build.clean {
-        tasks.push(task("C++: Clean", command, "$ZED_WORKTREE_ROOT", shell));
-    }
+    for profile in TASK_PROFILES {
+        let profiled = profiled_build(config, profile);
 
-    if config.build.system == "cmake" {
-        for target in cmake_targets {
-            let build_command = build_command_for_target(config, &target.name);
+        if let Some(command) = &profiled.configure {
             tasks.push(task(
-                &format!("C++: Build Target: {}", target.name),
-                &build_command,
+                &profile_label("C++: Configure", profile.build_type),
+                command,
                 "$ZED_WORKTREE_ROOT",
                 shell,
             ));
         }
-    }
+        if let Some(command) = &profiled.build {
+            tasks.push(task(
+                &profile_label("C++: Build", profile.build_type),
+                command,
+                "$ZED_WORKTREE_ROOT",
+                shell,
+            ));
+        }
+        if let Some(command) = &profiled.clean {
+            tasks.push(task(
+                &profile_label("C++: Clean", profile.build_type),
+                command,
+                "$ZED_WORKTREE_ROOT",
+                shell,
+            ));
+        }
 
-    if let Some(command) = &config.run.command {
-        tasks.push(task("C++: Run", command, &config.run.cwd, shell));
-    }
-
-    // Auto-discover executable targets from cmake when no explicit run command is configured
-    if config.run.command.is_none() {
-        let build_dir = &config.build.build_dir;
-        for target in cmake_targets.iter().filter(|t| t.executable) {
-            if let Some(output) = &target.output {
-                let run_command = run_command_for_target(build_dir, output, shell);
+        if config.build.system == "cmake" {
+            for target in cmake_targets {
+                let build_command = build_command_for_target(&profiled, &target.name);
                 tasks.push(task(
-                    &format!("C++: Run: {}", target.name),
-                    &run_command,
+                    &profile_target_label("C++: Build Target", profile.build_type, &target.name),
+                    &build_command,
                     "$ZED_WORKTREE_ROOT",
                     shell,
                 ));
+            }
+        }
+
+        if let Some(command) = &profiled.run {
+            tasks.push(task(
+                &profile_label("C++: Run", profile.build_type),
+                command,
+                &config.run.cwd,
+                shell,
+            ));
+        }
+
+        // Auto-discover executable targets from cmake when no explicit run command is configured
+        if profiled.run.is_none() {
+            for target in cmake_targets.iter().filter(|t| t.executable) {
+                if let Some(output) = &target.output {
+                    let run_command = run_command_for_target(&profiled.build_dir, output, shell);
+                    tasks.push(task(
+                        &profile_target_label("C++: Run", profile.build_type, &target.name),
+                        &run_command,
+                        "$ZED_WORKTREE_ROOT",
+                        shell,
+                    ));
+                }
             }
         }
     }
@@ -56,17 +105,140 @@ pub fn generate_cpp_tasks_json(
     serde_json::to_string_pretty(&tasks).map_err(|error| ToolkitError::IoMessage(error.to_string()))
 }
 
-fn build_command_for_target(config: &EffectiveConfig, target: &str) -> String {
-    let base_command = config
+fn profiled_build(config: &EffectiveConfig, profile: TaskProfile) -> ProfiledBuild {
+    let build_dir = profile_build_dir(config, profile);
+    let build_type = profile.build_type;
+
+    ProfiledBuild {
+        configure: profile_command(
+            config
+                .build
+                .configure_template
+                .as_deref()
+                .or(config.build.configure.as_deref()),
+            &build_dir,
+            build_type,
+        ),
+        build: profile_command(
+            config
+                .build
+                .build_template
+                .as_deref()
+                .or(config.build.build.as_deref()),
+            &build_dir,
+            build_type,
+        ),
+        clean: profile_command(
+            config
+                .build
+                .clean_template
+                .as_deref()
+                .or(config.build.clean.as_deref()),
+            &build_dir,
+            build_type,
+        ),
+        run: profile_command(
+            config
+                .run
+                .command_template
+                .as_deref()
+                .or(config.run.command.as_deref()),
+            &build_dir,
+            build_type,
+        ),
+        build_dir,
+        build_type,
+    }
+}
+
+fn profile_command(command: Option<&str>, build_dir: &str, build_type: &str) -> Option<String> {
+    command.map(|command| {
+        command
+            .replace("{build_dir}", build_dir)
+            .replace("{build_type}", build_type)
+    })
+}
+
+fn profile_build_dir(config: &EffectiveConfig, profile: TaskProfile) -> String {
+    let base_dir = config
         .build
+        .build_dir_template
+        .as_deref()
+        .unwrap_or(&config.build.build_dir);
+    let trimmed = base_dir.trim_end_matches(['/', '\\']);
+    let lower = trimmed.to_lowercase();
+    let suffix = profile.suffix;
+
+    if lower.ends_with(&format!("-{suffix}"))
+        || lower.ends_with(&format!("/{suffix}"))
+        || lower.ends_with(&format!("\\{suffix}"))
+    {
+        trimmed.to_string()
+    } else if suffix == "debug"
+        && (lower.ends_with("-release")
+            || lower.ends_with("/release")
+            || lower.ends_with("\\release"))
+    {
+        replace_last_path_segment(trimmed, "debug")
+    } else if suffix == "release"
+        && (lower.ends_with("-debug") || lower.ends_with("/debug") || lower.ends_with("\\debug"))
+    {
+        replace_last_path_segment(trimmed, "release")
+    } else {
+        format!("{trimmed}/{suffix}")
+    }
+}
+
+fn replace_last_path_segment(path: &str, suffix: &str) -> String {
+    if let Some(prefix) = path
+        .strip_suffix("-debug")
+        .or_else(|| path.strip_suffix("-release"))
+    {
+        return format!("{prefix}-{suffix}");
+    }
+    if let Some(prefix) = path
+        .strip_suffix("/debug")
+        .or_else(|| path.strip_suffix("/release"))
+    {
+        return format!("{prefix}/{suffix}");
+    }
+    if let Some(prefix) = path
+        .strip_suffix("\\debug")
+        .or_else(|| path.strip_suffix("\\release"))
+    {
+        return format!("{prefix}\\{suffix}");
+    }
+    path.to_string()
+}
+
+fn profile_label(base: &str, build_type: &str) -> String {
+    format!("{base} ({build_type})")
+}
+
+fn profile_target_label(base: &str, build_type: &str, target: &str) -> String {
+    format!("{base} ({build_type}): {target}")
+}
+
+fn build_command_for_target(profiled: &ProfiledBuild, target: &str) -> String {
+    let base_command = profiled
         .build
         .clone()
-        .unwrap_or_else(|| format!("cmake --build {}", config.build.build_dir));
+        .unwrap_or_else(|| format!("cmake --build {}", profiled.build_dir));
     let target_arg = target_argument(target);
+    let config_arg = format!(" --config {}", profiled.build_type);
     if let Some((prefix, suffix)) = base_command.rsplit_once("cmake --build ") {
-        return format!("{prefix}cmake --build {suffix} --target {target_arg}");
+        let config_arg = if suffix.contains(" --config ") {
+            ""
+        } else {
+            config_arg.as_str()
+        };
+        return format!("{prefix}cmake --build {suffix}{config_arg} --target {target_arg}");
     }
-    format!("{base_command} --target {target_arg}")
+    if base_command.contains(" --config ") {
+        format!("{base_command} --target {target_arg}")
+    } else {
+        format!("{base_command}{config_arg} --target {target_arg}")
+    }
 }
 
 fn target_argument(target: &str) -> String {
@@ -131,12 +303,75 @@ mod tests {
         let json = generate_cpp_tasks_json(&config, ShellKind::Sh, &[]).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(parsed.as_array().unwrap().len(), 3);
-        assert_eq!(parsed[0]["label"], "C++: Configure");
-        assert_eq!(parsed[1]["label"], "C++: Build");
-        assert_eq!(parsed[2]["label"], "C++: Clean");
-        assert_eq!(parsed[1]["command"], "cmake --build build");
+        assert_eq!(parsed.as_array().unwrap().len(), 6);
+        assert_eq!(parsed[0]["label"], "C++: Configure (Debug)");
+        assert_eq!(parsed[1]["label"], "C++: Build (Debug)");
+        assert_eq!(parsed[2]["label"], "C++: Clean (Debug)");
+        assert_eq!(parsed[3]["label"], "C++: Configure (Release)");
+        assert_eq!(parsed[4]["label"], "C++: Build (Release)");
+        assert_eq!(parsed[5]["label"], "C++: Clean (Release)");
+        assert_eq!(parsed[1]["command"], "cmake --build build/debug");
+        assert_eq!(parsed[4]["command"], "cmake --build build/release");
         assert!(parsed[1]["args"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn generates_debug_and_release_task_profiles_for_cmake_targets() {
+        let config = resolve_config(Some(UserConfig {
+            preset: Some("gcc-cmake-ninja".to_string()),
+            ..UserConfig::default()
+        }))
+        .unwrap();
+        let targets = vec![CmakeTarget {
+            name: "myapp".to_string(),
+            output: Some("myapp.exe".to_string()),
+            executable: true,
+        }];
+        let json = generate_cpp_tasks_json(&config, ShellKind::Sh, &targets).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert!(task_labels(&parsed).contains(&"C++: Configure (Debug)"));
+        assert!(task_labels(&parsed).contains(&"C++: Configure (Release)"));
+        assert!(task_labels(&parsed).contains(&"C++: Build (Debug)"));
+        assert!(task_labels(&parsed).contains(&"C++: Build (Release)"));
+        assert!(task_labels(&parsed).contains(&"C++: Run (Debug): myapp"));
+        assert!(task_labels(&parsed).contains(&"C++: Run (Release): myapp"));
+
+        let debug_configure = task_with_label(&parsed, "C++: Configure (Debug)");
+        assert!(
+            debug_configure["command"]
+                .as_str()
+                .unwrap()
+                .contains("-B build/debug")
+        );
+        assert!(
+            debug_configure["command"]
+                .as_str()
+                .unwrap()
+                .contains("-DCMAKE_BUILD_TYPE=Debug")
+        );
+
+        let release_configure = task_with_label(&parsed, "C++: Configure (Release)");
+        assert!(
+            release_configure["command"]
+                .as_str()
+                .unwrap()
+                .contains("-B build/release")
+        );
+        assert!(
+            release_configure["command"]
+                .as_str()
+                .unwrap()
+                .contains("-DCMAKE_BUILD_TYPE=Release")
+        );
+
+        let release_run = task_with_label(&parsed, "C++: Run (Release): myapp");
+        assert!(
+            release_run["command"]
+                .as_str()
+                .unwrap()
+                .contains("build/release/myapp.exe")
+        );
     }
 
     #[test]
@@ -154,13 +389,13 @@ mod tests {
         let json = generate_cpp_tasks_json(&config, ShellKind::Sh, &targets).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(parsed.as_array().unwrap().len(), 5);
-        let run_task = task_with_label(&parsed, "C++: Run: myapp");
+        assert_eq!(parsed.as_array().unwrap().len(), 10);
+        let run_task = task_with_label(&parsed, "C++: Run (Debug): myapp");
         assert!(
             run_task["command"]
                 .as_str()
                 .unwrap()
-                .contains("build/myapp.exe")
+                .contains("build/debug/myapp.exe")
         );
     }
 
@@ -193,16 +428,18 @@ mod tests {
             .map(|task| task["label"].as_str().unwrap())
             .collect::<Vec<_>>();
 
-        assert!(labels.contains(&"C++: Build Target: QEnhancedCustomPlot"));
-        assert!(labels.contains(&"C++: Build Target: demo_realtime"));
-        assert!(labels.contains(&"C++: Run: demo_realtime"));
-        assert!(!labels.contains(&"C++: Run: QEnhancedCustomPlot"));
+        assert!(labels.contains(&"C++: Build Target (Debug): QEnhancedCustomPlot"));
+        assert!(labels.contains(&"C++: Build Target (Release): QEnhancedCustomPlot"));
+        assert!(labels.contains(&"C++: Build Target (Debug): demo_realtime"));
+        assert!(labels.contains(&"C++: Run (Debug): demo_realtime"));
+        assert!(labels.contains(&"C++: Run (Release): demo_realtime"));
+        assert!(!labels.contains(&"C++: Run (Debug): QEnhancedCustomPlot"));
+        assert!(!labels.contains(&"C++: Run (Release): QEnhancedCustomPlot"));
         assert!(parsed.as_array().unwrap().iter().any(|task| {
-            task["label"] == "C++: Build Target: QEnhancedCustomPlot"
-                && task["args"][2]
-                    .as_str()
-                    .unwrap()
-                    .contains("cmake --build build --target QEnhancedCustomPlot")
+            task["label"] == "C++: Build Target (Debug): QEnhancedCustomPlot"
+                && task["args"][2].as_str().unwrap().contains(
+                    "cmake --build build/debug --config Debug --target QEnhancedCustomPlot",
+                )
         }));
     }
 
@@ -225,9 +462,11 @@ mod tests {
         let json = generate_cpp_tasks_json(&config, ShellKind::Sh, &targets).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        assert!(task_labels(&parsed).contains(&"C++: Build Target: QEnhancedCustomPlot"));
-        assert_eq!(run_task_count(&parsed), 1);
-        assert!(task_labels(&parsed).contains(&"C++: Run"));
+        assert!(task_labels(&parsed).contains(&"C++: Build Target (Debug): QEnhancedCustomPlot"));
+        assert!(task_labels(&parsed).contains(&"C++: Build Target (Release): QEnhancedCustomPlot"));
+        assert_eq!(run_task_count(&parsed), 2);
+        assert!(task_labels(&parsed).contains(&"C++: Run (Debug)"));
+        assert!(task_labels(&parsed).contains(&"C++: Run (Release)"));
     }
 
     #[test]
@@ -249,10 +488,11 @@ mod tests {
         let json = generate_cpp_tasks_json(&config, ShellKind::Sh, &targets).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        // Only one run task (the explicit one), not auto-discovered
-        assert_eq!(parsed.as_array().unwrap().len(), 5);
-        assert_eq!(run_task_count(&parsed), 1);
-        let run_task = task_with_label(&parsed, "C++: Run");
+        // Only explicit run tasks are generated for each profile, not auto-discovered run targets.
+        assert_eq!(parsed.as_array().unwrap().len(), 10);
+        assert_eq!(run_task_count(&parsed), 2);
+        assert_eq!(run_task_target_count(&parsed), 0);
+        let run_task = task_with_label(&parsed, "C++: Run (Debug)");
         assert!(
             run_task["command"]
                 .as_str()
@@ -283,11 +523,11 @@ mod tests {
         let json = generate_cpp_tasks_json(&config, ShellKind::Sh, &targets).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(parsed.as_array().unwrap().len(), 6);
-        assert!(task_labels(&parsed).contains(&"C++: Build Target: mylib"));
-        assert!(task_labels(&parsed).contains(&"C++: Build Target: myapp"));
-        assert!(task_labels(&parsed).contains(&"C++: Run: myapp"));
-        assert!(!task_labels(&parsed).contains(&"C++: Run: mylib"));
+        assert_eq!(parsed.as_array().unwrap().len(), 12);
+        assert!(task_labels(&parsed).contains(&"C++: Build Target (Debug): mylib"));
+        assert!(task_labels(&parsed).contains(&"C++: Build Target (Debug): myapp"));
+        assert!(task_labels(&parsed).contains(&"C++: Run (Debug): myapp"));
+        assert!(!task_labels(&parsed).contains(&"C++: Run (Debug): mylib"));
     }
 
     fn task_labels(parsed: &serde_json::Value) -> Vec<&str> {
@@ -312,6 +552,13 @@ mod tests {
         task_labels(parsed)
             .iter()
             .filter(|label| label.starts_with("C++: Run"))
+            .count()
+    }
+
+    fn run_task_target_count(parsed: &serde_json::Value) -> usize {
+        task_labels(parsed)
+            .iter()
+            .filter(|label| label.starts_with("C++: Run (") && label.contains("): "))
             .count()
     }
 }

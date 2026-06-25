@@ -77,15 +77,20 @@ pub struct EffectiveBuild {
     pub system: String,
     pub build_dir_style: BuildDirStyle,
     pub build_dir: String,
+    pub build_dir_template: Option<String>,
     pub build_type: String,
     pub configure: Option<String>,
+    pub configure_template: Option<String>,
     pub build: Option<String>,
+    pub build_template: Option<String>,
     pub clean: Option<String>,
+    pub clean_template: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EffectiveRun {
     pub command: Option<String>,
+    pub command_template: Option<String>,
     pub cwd: String,
 }
 

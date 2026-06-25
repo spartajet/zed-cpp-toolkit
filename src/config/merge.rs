@@ -77,8 +77,9 @@ pub fn resolve_config_for_host(
             "build_dir_style = \"custom\" requires build_dir".to_string(),
         ));
     }
-    let build_dir =
-        explicit_build_dir.unwrap_or_else(|| infer_build_dir(build_dir_style, &build_type));
+    let build_dir = explicit_build_dir
+        .clone()
+        .unwrap_or_else(|| infer_build_dir(build_dir_style, &build_type));
 
     let toolchain_name = merged
         .toolchain
@@ -121,13 +122,18 @@ pub fn resolve_config_for_host(
             system: merged.build.system.unwrap_or_else(|| "custom".to_string()),
             build_dir_style,
             build_dir: build_dir.clone(),
+            build_dir_template: explicit_build_dir,
             build_type: build_type.clone(),
-            configure: expand_optional(merged.build.configure, &build_dir, &build_type),
-            build: expand_optional(merged.build.build, &build_dir, &build_type),
-            clean: expand_optional(merged.build.clean, &build_dir, &build_type),
+            configure: expand_optional(merged.build.configure.clone(), &build_dir, &build_type),
+            configure_template: merged.build.configure,
+            build: expand_optional(merged.build.build.clone(), &build_dir, &build_type),
+            build_template: merged.build.build,
+            clean: expand_optional(merged.build.clean.clone(), &build_dir, &build_type),
+            clean_template: merged.build.clean,
         },
         run: EffectiveRun {
-            command: expand_optional(merged.run.command, &build_dir, &build_type),
+            command: expand_optional(merged.run.command.clone(), &build_dir, &build_type),
+            command_template: merged.run.command,
             cwd: merged
                 .run
                 .cwd

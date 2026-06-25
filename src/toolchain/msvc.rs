@@ -12,9 +12,17 @@ pub fn prepare_task_config(
     let mut prepared = config.clone();
 
     prepared.build.configure = wrap_optional_command(prepared.build.configure, &vs_dev_cmd);
+    prepared.build.configure_template =
+        wrap_optional_command(prepared.build.configure_template, &vs_dev_cmd);
     prepared.build.build = wrap_optional_command(prepared.build.build, &vs_dev_cmd);
+    prepared.build.build_template =
+        wrap_optional_command(prepared.build.build_template, &vs_dev_cmd);
     prepared.build.clean = wrap_optional_command(prepared.build.clean, &vs_dev_cmd);
+    prepared.build.clean_template =
+        wrap_optional_command(prepared.build.clean_template, &vs_dev_cmd);
     prepared.run.command = wrap_optional_command(prepared.run.command, &vs_dev_cmd);
+    prepared.run.command_template =
+        wrap_optional_command(prepared.run.command_template, &vs_dev_cmd);
 
     Ok(prepared)
 }

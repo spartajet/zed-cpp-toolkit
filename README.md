@@ -25,8 +25,8 @@ extension if that behavior is acceptable for your projects.
 - Built-in presets: `msvc-cmake-ninja`, `gcc-cmake-ninja`, `clang-cmake-ninja`,
   `gcc-make`, `clang-make`, and `custom`.
 - Generates `.clangd` while preserving user-authored `.clangd` files.
-- Generates `.zed/tasks.json` with Configure, Build, Clean, Build Target, and Run
-  tasks.
+- Generates `.zed/tasks.json` with Debug and Release Configure, Build, Clean,
+  Build Target, and Run tasks.
 - Discovers CMake targets from CMake file-api replies or `build.ninja`.
 - Generates Run tasks only for executable CMake targets; library targets get Build
   Target tasks only.
@@ -36,8 +36,8 @@ extension if that behavior is acceptable for your projects.
   `PATH`.
 
 > 中文：核心能力包括配置驱动、内置 preset、自动生成 `.clangd` 和 `.zed/tasks.json`、
-> 自动发现 CMake target、只为可执行 target 生成 Run 任务，并继续支持 Windows/MSVC 与
-> `neocmakelsp`。
+> 自动生成 Debug/Release 两套 task、自动发现 CMake target、只为可执行 target 生成 Run 任务，
+> 并继续支持 Windows/MSVC 与 `neocmakelsp`。
 
 ## Safety Model
 
@@ -213,8 +213,17 @@ Supported `build_dir_style` values:
 
 If `build_dir` is set, it always wins over `build_dir_style`.
 
+Generated tasks always include Debug and Release profiles. For task generation,
+the base build directory is expanded per profile: `build` becomes `build/debug`
+and `build/release`; `cmake-build-debug` becomes `cmake-build-debug` and
+`cmake-build-release`; explicit directories without a trailing build type get
+`debug` and `release` subdirectories.
+
 > 中文：`[build]` 定义 Configure/Build/Clean 命令。命令支持 `{build_dir}` 和
-> `{build_type}`。显式设置 `build_dir` 时，它优先于 `build_dir_style`。
+> `{build_type}`。显式设置 `build_dir` 时，它优先于 `build_dir_style`。生成 task 时会固定生成
+> Debug/Release 两套：`build` 展开为 `build/debug` 和 `build/release`；
+> `cmake-build-debug` 展开为 `cmake-build-debug` 和 `cmake-build-release`；
+> 不带构建类型后缀的显式目录会追加 `debug` 和 `release` 子目录。
 
 ### `[run]`
 
@@ -286,20 +295,27 @@ The extension writes these workspace files:
 `.zed/tasks.json` is refreshed from the current effective configuration. Common task
 labels:
 
-- `C++: Configure`
-- `C++: Build`
-- `C++: Build Target: <target>`
-- `C++: Clean`
-- `C++: Run`
-- `C++: Run: <target>`
+- `C++: Configure (Debug)`
+- `C++: Configure (Release)`
+- `C++: Build (Debug)`
+- `C++: Build (Release)`
+- `C++: Build Target (Debug): <target>`
+- `C++: Build Target (Release): <target>`
+- `C++: Clean (Debug)`
+- `C++: Clean (Release)`
+- `C++: Run (Debug)`
+- `C++: Run (Release)`
+- `C++: Run (Debug): <target>`
+- `C++: Run (Release): <target>`
 
 > 中文：扩展会写 `.clangd` 和 `.zed/tasks.json`。用户手写 `.clangd` 不会被覆盖；只有自动生成标记的
 > `.clangd` 会被刷新。
 
 ## CMake Target Discovery
 
-CMake target discovery requires running `C++: Configure` at least once so CMake can
-create the build directory.
+CMake target discovery requires running a profile configure task, such as
+`C++: Configure (Debug)` or `C++: Configure (Release)`, so CMake can create the
+matching build directory.
 
 Discovery order:
 
@@ -308,15 +324,16 @@ Discovery order:
 
 Discovery rules:
 
-- Executable targets get both `C++: Build Target: <target>` and
-  `C++: Run: <target>`.
-- Library targets get `C++: Build Target: <target>` only.
+- Executable targets get both `C++: Build Target (<profile>): <target>` and
+  `C++: Run (<profile>): <target>`.
+- Library targets get `C++: Build Target (<profile>): <target>` only.
 - Internal CMake targets, `all`, `clean`, `edit_cache`, `rebuild_cache`,
   `*_autogen`, `CMakeFiles/...`, and path-like phony outputs are filtered out.
 - Linux/WSL executables without `.exe` suffix are supported.
 
-> 中文：CMake target 发现依赖 Configure 后生成的构建目录。扩展优先读 CMake file-api，
-> 回退解析 `build.ninja`。可执行 target 会生成 Run 任务；库 target 不会。
+> 中文：CMake target 发现依赖对应 profile 的 Configure 任务生成构建目录。扩展优先读 CMake
+> file-api，回退解析 `build.ninja`。可执行 target 会生成对应 Debug/Release 的 Run 任务；
+> 库 target 不会。
 
 ## Common Configurations
 
@@ -454,12 +471,13 @@ Optional `.zed/settings.json` configuration:
 
 ### No Run Task
 
-Run `C++: Configure` first. CMake target discovery depends on `build.ninja` or CMake
-file-api replies. Library-only projects do not generate Run tasks. You can always
+Run `C++: Configure (Debug)` or `C++: Configure (Release)` first. CMake target
+discovery depends on `build.ninja` or CMake file-api replies in the corresponding
+build directory. Library-only projects do not generate Run tasks. You can always
 set `[run].command` manually.
 
-> 中文：先运行 `C++: Configure`。只有可执行 target 才会生成 Run 任务；也可以手动配置
-> `[run].command`。
+> 中文：先运行 `C++: Configure (Debug)` 或 `C++: Configure (Release)`。只有可执行 target
+> 才会生成 Run 任务；也可以手动配置 `[run].command`。
 
 ### Unexpected `C++: Build Target: /path/to/CMakeLists.txt`
 
