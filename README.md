@@ -219,11 +219,25 @@ and `build/release`; `cmake-build-debug` becomes `cmake-build-debug` and
 `cmake-build-release`; explicit directories without a trailing build type get
 `debug` and `release` subdirectories.
 
+For CMake projects, generated Configure tasks also set
+`CMAKE_RUNTIME_OUTPUT_DIRECTORY` so executable outputs are kept separate from CMake
+intermediate files. With the default `build` style, executables go to
+`build/bin/debug` and `build/bin/release`. With `build_dir_style = "clion"`,
+executables go to `cmake-build-debug/bin` and `cmake-build-release/bin`.
+The value passed to CMake is relative to each profile build directory, so these
+paths do not create nested build directories such as
+`cmake-build-debug/cmake-build-debug/bin`.
+
 > 中文：`[build]` 定义 Configure/Build/Clean 命令。命令支持 `{build_dir}` 和
 > `{build_type}`。显式设置 `build_dir` 时，它优先于 `build_dir_style`。生成 task 时会固定生成
 > Debug/Release 两套：`build` 展开为 `build/debug` 和 `build/release`；
 > `cmake-build-debug` 展开为 `cmake-build-debug` 和 `cmake-build-release`；
 > 不带构建类型后缀的显式目录会追加 `debug` 和 `release` 子目录。
+> CMake Configure task 还会设置 `CMAKE_RUNTIME_OUTPUT_DIRECTORY`，把 exe 与 CMake
+> 中间文件分开：默认 `build` 风格输出到 `build/bin/debug` 和 `build/bin/release`；
+> `clion` 风格输出到 `cmake-build-debug/bin` 和 `cmake-build-release/bin`。
+> 传给 CMake 的值会按每个 profile 的构建目录计算为相对路径，避免生成
+> `cmake-build-debug/cmake-build-debug/bin` 这类嵌套目录。
 
 ### `[run]`
 
@@ -327,13 +341,15 @@ Discovery rules:
 - Executable targets get both `C++: Build Target (<profile>): <target>` and
   `C++: Run (<profile>): <target>`.
 - Library targets get `C++: Build Target (<profile>): <target>` only.
+- Generated Run tasks use the configured runtime output directory, not the CMake
+  intermediate build directory.
 - Internal CMake targets, `all`, `clean`, `edit_cache`, `rebuild_cache`,
   `*_autogen`, `CMakeFiles/...`, and path-like phony outputs are filtered out.
 - Linux/WSL executables without `.exe` suffix are supported.
 
 > 中文：CMake target 发现依赖对应 profile 的 Configure 任务生成构建目录。扩展优先读 CMake
 > file-api，回退解析 `build.ninja`。可执行 target 会生成对应 Debug/Release 的 Run 任务；
-> 库 target 不会。
+> 库 target 不会。自动生成的 Run 任务会从 runtime 输出目录运行 exe，而不是从 CMake 中间目录运行。
 
 ## Common Configurations
 

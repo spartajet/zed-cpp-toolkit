@@ -23,6 +23,7 @@ struct TaskProfile {
 
 struct ProfiledBuild {
     build_dir: String,
+    runtime_output_dir: String,
     build_type: &'static str,
     configure: Option<String>,
     build: Option<String>,
@@ -90,7 +91,8 @@ pub fn generate_cpp_tasks_json(
         if profiled.run.is_none() {
             for target in cmake_targets.iter().filter(|t| t.executable) {
                 if let Some(output) = &target.output {
-                    let run_command = run_command_for_target(&profiled.build_dir, output, shell);
+                    let run_command =
+                        run_command_for_target(&profiled.runtime_output_dir, output, shell);
                     tasks.push(task(
                         &profile_target_label("C++: Run", profile.build_type, &target.name),
                         &run_command,
@@ -107,17 +109,21 @@ pub fn generate_cpp_tasks_json(
 
 fn profiled_build(config: &EffectiveConfig, profile: TaskProfile) -> ProfiledBuild {
     let build_dir = profile_build_dir(config, profile);
+    let runtime_output_dir = profile_runtime_output_dir(profile, &build_dir);
+    let cmake_runtime_output_dir = relative_runtime_output_dir(&build_dir, &runtime_output_dir);
     let build_type = profile.build_type;
 
     ProfiledBuild {
-        configure: profile_command(
+        configure: profile_configure_command(
             config
                 .build
                 .configure_template
                 .as_deref()
                 .or(config.build.configure.as_deref()),
             &build_dir,
+            &cmake_runtime_output_dir,
             build_type,
+            &config.build.system,
         ),
         build: profile_command(
             config
@@ -147,8 +153,32 @@ fn profiled_build(config: &EffectiveConfig, profile: TaskProfile) -> ProfiledBui
             build_type,
         ),
         build_dir,
+        runtime_output_dir,
         build_type,
     }
+}
+
+fn profile_configure_command(
+    command: Option<&str>,
+    build_dir: &str,
+    runtime_output_dir: &str,
+    build_type: &str,
+    build_system: &str,
+) -> Option<String> {
+    let command = profile_command(command, build_dir, build_type)?;
+    if build_system != "cmake" || command.contains("CMAKE_RUNTIME_OUTPUT_DIRECTORY") {
+        return Some(command);
+    }
+    let runtime_arg = format!("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY={runtime_output_dir}");
+    Some(append_command_argument(&command, &runtime_arg))
+}
+
+fn append_command_argument(command: &str, argument: &str) -> String {
+    if command.starts_with("& cmd.exe /S /C '") && command.ends_with('\'') {
+        let command = command.trim_end_matches('\'');
+        return format!("{command} {argument}'");
+    }
+    format!("{command} {argument}")
 }
 
 fn profile_command(command: Option<&str>, build_dir: &str, build_type: &str) -> Option<String> {
@@ -187,6 +217,38 @@ fn profile_build_dir(config: &EffectiveConfig, profile: TaskProfile) -> String {
     } else {
         format!("{trimmed}/{suffix}")
     }
+}
+
+fn profile_runtime_output_dir(profile: TaskProfile, build_dir: &str) -> String {
+    if build_dir.ends_with(&format!("-{}", profile.suffix)) {
+        return format!("{build_dir}/bin");
+    }
+
+    if let Some(prefix) = build_dir
+        .strip_suffix(&format!("/{}", profile.suffix))
+        .or_else(|| build_dir.strip_suffix(&format!("\\{}", profile.suffix)))
+    {
+        return format!("{prefix}/bin/{}", profile.suffix);
+    }
+
+    format!("{build_dir}/bin")
+}
+
+fn relative_runtime_output_dir(build_dir: &str, runtime_output_dir: &str) -> String {
+    let build_dir = build_dir.replace('\\', "/");
+    let runtime_output_dir = runtime_output_dir.replace('\\', "/");
+
+    if let Some(suffix) = runtime_output_dir.strip_prefix(&format!("{build_dir}/")) {
+        return suffix.to_string();
+    }
+
+    if let Some((parent, _)) = build_dir.rsplit_once('/')
+        && let Some(suffix) = runtime_output_dir.strip_prefix(&format!("{parent}/"))
+    {
+        return format!("../{suffix}");
+    }
+
+    runtime_output_dir
 }
 
 fn replace_last_path_segment(path: &str, suffix: &str) -> String {
@@ -257,22 +319,35 @@ fn target_needs_shell_quotes(target: &str) -> bool {
 }
 
 fn run_command_for_target(build_dir: &str, output: &str, shell: ShellKind) -> String {
-    let output = output.replace('/', "\\");
+    let path = run_path_for_target(build_dir, output);
     match shell {
         ShellKind::Powershell => {
-            format!(
-                "Start-Process -FilePath \"$ZED_WORKTREE_ROOT\\{}\\{}\"",
-                build_dir, output
-            )
+            format!("Start-Process -FilePath \"$ZED_WORKTREE_ROOT/{path}\"")
         }
-        ShellKind::Sh => {
-            format!(
-                "\"$ZED_WORKTREE_ROOT/{}/{}\"",
-                build_dir,
-                output.replace('\\', "/")
-            )
-        }
+        ShellKind::Sh => format!("\"$ZED_WORKTREE_ROOT/{path}\""),
     }
+}
+
+fn run_path_for_target(runtime_output_dir: &str, output: &str) -> String {
+    let runtime_output_dir = runtime_output_dir.replace('\\', "/");
+    let output = output.replace('\\', "/");
+
+    if output.starts_with(&format!("{runtime_output_dir}/")) {
+        return output;
+    }
+
+    let runtime_leaf = runtime_output_dir
+        .rsplit('/')
+        .next()
+        .unwrap_or(runtime_output_dir.as_str());
+    if output.starts_with(&format!("{runtime_leaf}/")) {
+        return format!(
+            "{runtime_output_dir}/{}",
+            output.trim_start_matches(&format!("{runtime_leaf}/"))
+        );
+    }
+
+    format!("{runtime_output_dir}/{output}")
 }
 
 fn task(label: &str, command_string: &str, cwd: &str, shell: ShellKind) -> serde_json::Value {
@@ -292,6 +367,10 @@ mod tests {
     use crate::build::shell::ShellKind;
     use crate::config::merge::resolve_config;
     use crate::config::schema::UserConfig;
+    use crate::environment::tools::{CommandOutput, CommandRunner};
+    use crate::error::{ToolkitError, ToolkitResult};
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
 
     #[test]
     fn generates_configure_build_and_clean_tasks() {
@@ -370,7 +449,130 @@ mod tests {
             release_run["command"]
                 .as_str()
                 .unwrap()
-                .contains("build/release/myapp.exe")
+                .contains("build/bin/release/myapp.exe")
+        );
+    }
+
+    #[test]
+    fn configures_default_runtime_output_directories_under_build_bin_profiles() {
+        let config = resolve_config(Some(UserConfig {
+            preset: Some("gcc-cmake-ninja".to_string()),
+            ..UserConfig::default()
+        }))
+        .unwrap();
+        let json = generate_cpp_tasks_json(&config, ShellKind::Sh, &[]).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        let debug_configure = task_with_label(&parsed, "C++: Configure (Debug)");
+        assert!(
+            debug_configure["command"]
+                .as_str()
+                .unwrap()
+                .contains("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=../bin/debug")
+        );
+    }
+
+    #[test]
+    fn configures_clion_runtime_output_directories_under_profile_bin_directories() {
+        let config = resolve_config(Some(UserConfig {
+            preset: Some("gcc-cmake-ninja".to_string()),
+            build: crate::config::schema::BuildConfig {
+                build_dir_style: Some(crate::config::schema::BuildDirStyle::Clion),
+                ..Default::default()
+            },
+            ..UserConfig::default()
+        }))
+        .unwrap();
+        let json = generate_cpp_tasks_json(&config, ShellKind::Sh, &[]).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        let debug_configure = task_with_label(&parsed, "C++: Configure (Debug)");
+        assert!(
+            debug_configure["command"]
+                .as_str()
+                .unwrap()
+                .contains("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=bin")
+        );
+    }
+
+    #[test]
+    fn configures_msvc_clion_runtime_output_directory_inside_wrapped_cmake_command() {
+        let config = resolve_config(Some(UserConfig {
+            preset: Some("msvc-cmake-ninja".to_string()),
+            build: crate::config::schema::BuildConfig {
+                build_dir_style: Some(crate::config::schema::BuildDirStyle::Clion),
+                ..Default::default()
+            },
+            ..UserConfig::default()
+        }))
+        .unwrap();
+        let runner = QueueRunner::new([CommandOutput {
+            status: Some(0),
+            stdout: "C:\\VS\\2022\\Community\n".to_string(),
+            stderr: String::new(),
+        }]);
+        let prepared = crate::toolchain::prepare_task_config(&config, &runner).unwrap();
+        let json = generate_cpp_tasks_json(&prepared, ShellKind::Powershell, &[]).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        let debug_configure = task_with_label(&parsed, "C++: Configure (Debug)");
+        let command = debug_configure["args"][2].as_str().unwrap();
+        assert!(command.contains(" -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=bin'"));
+        assert!(
+            !command.contains("' -DCMAKE_RUNTIME_OUTPUT_DIRECTORY"),
+            "runtime output argument must stay inside the wrapped cmd.exe command: {command}"
+        );
+    }
+
+    #[test]
+    fn powershell_run_tasks_use_forward_slashes_for_generated_paths() {
+        let config = resolve_config(Some(UserConfig {
+            preset: Some("gcc-cmake-ninja".to_string()),
+            build: crate::config::schema::BuildConfig {
+                build_dir_style: Some(crate::config::schema::BuildDirStyle::Clion),
+                ..Default::default()
+            },
+            ..UserConfig::default()
+        }))
+        .unwrap();
+        let targets = vec![CmakeTarget {
+            name: "myapp".to_string(),
+            output: Some("myapp.exe".to_string()),
+            executable: true,
+        }];
+        let json = generate_cpp_tasks_json(&config, ShellKind::Powershell, &targets).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        let run_task = task_with_label(&parsed, "C++: Run (Debug): myapp");
+        assert_eq!(
+            run_task["args"][2].as_str().unwrap(),
+            "Start-Process -FilePath \"$ZED_WORKTREE_ROOT/cmake-build-debug/bin/myapp.exe\""
+        );
+    }
+
+    #[test]
+    fn run_tasks_do_not_duplicate_runtime_output_directory_from_cmake_output() {
+        let config = resolve_config(Some(UserConfig {
+            preset: Some("gcc-cmake-ninja".to_string()),
+            build: crate::config::schema::BuildConfig {
+                build_dir_style: Some(crate::config::schema::BuildDirStyle::Clion),
+                ..Default::default()
+            },
+            ..UserConfig::default()
+        }))
+        .unwrap();
+        let targets = vec![CmakeTarget {
+            name: "myapp".to_string(),
+            output: Some("bin/myapp.exe".to_string()),
+            executable: true,
+        }];
+        let json = generate_cpp_tasks_json(&config, ShellKind::Powershell, &targets).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        let run_task = task_with_label(&parsed, "C++: Run (Debug): myapp");
+        assert_eq!(
+            run_task["args"][2].as_str().unwrap(),
+            "Start-Process -FilePath \"$ZED_WORKTREE_ROOT/cmake-build-debug/bin/myapp.exe\""
         );
     }
 
@@ -395,7 +597,7 @@ mod tests {
             run_task["command"]
                 .as_str()
                 .unwrap()
-                .contains("build/debug/myapp.exe")
+                .contains("build/bin/debug/myapp.exe")
         );
     }
 
@@ -560,5 +762,26 @@ mod tests {
             .iter()
             .filter(|label| label.starts_with("C++: Run (") && label.contains("): "))
             .count()
+    }
+
+    struct QueueRunner {
+        outputs: RefCell<VecDeque<CommandOutput>>,
+    }
+
+    impl QueueRunner {
+        fn new(outputs: impl IntoIterator<Item = CommandOutput>) -> Self {
+            Self {
+                outputs: RefCell::new(outputs.into_iter().collect()),
+            }
+        }
+    }
+
+    impl CommandRunner for QueueRunner {
+        fn run_command(&self, _command: &str, _args: &[String]) -> ToolkitResult<CommandOutput> {
+            self.outputs
+                .borrow_mut()
+                .pop_front()
+                .ok_or_else(|| ToolkitError::IoMessage("unexpected command".to_string()))
+        }
     }
 }
